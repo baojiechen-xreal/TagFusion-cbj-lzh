@@ -18,15 +18,15 @@ TagTracker::TagTracker() = default;
 
 TagTracker::~TagTracker() = default;
 
-TagTracker::TagTracker(const std::string &settingsFile)
+TagTracker::TagTracker(const std::string &settings_file)
 {
-    cv::FileStorage fs(settingsFile, cv::FileStorage::READ);
+    cv::FileStorage fs(settings_file, cv::FileStorage::READ);
     if(!fs.isOpened())
         return;
 
     cv::FileNode node = fs["Tag.verbose"];
     if(!node.empty())
-        mbVerbose = static_cast<int>(node) != 0;
+        verbose_ = static_cast<int>(node) != 0;
 
     // Tag.export=1 时启用导出；目录默认 tag_export，可用 Tag.export_dir 覆盖
     bool enable_export = false;
@@ -41,99 +41,99 @@ TagTracker::TagTracker(const std::string &settingsFile)
 
     if(enable_export)
     {
-        mpExporter = std::make_unique<TagMapExporter>(
-            export_dir, TagFactorWeightParams::FromSettings(settingsFile));
+        exporter_ = std::make_unique<TagMapExporter>(
+            export_dir, TagFactorWeightParams::FromSettings(settings_file));
     }
 }
 
 void TagTracker::LogCameraPose(const Frame &frame)
 {
-    if(!mpExporter || !mpExporter->IsEnabled() || !frame.HasPose())
+    if(!exporter_ || !exporter_->IsEnabled() || !frame.HasPose())
         return;
-    mpExporter->AppendCameraPose(frame.mnId, frame.mTimeStamp, frame.GetPose());
+    exporter_->AppendCameraPose(frame.mnId, frame.mTimeStamp, frame.GetPose());
 }
 
 void TagTracker::LogTagDetections(const Frame &frame)
 {
-    if(!mpExporter || !mpExporter->IsEnabled())
+    if(!exporter_ || !exporter_->IsEnabled())
         return;
-    mpExporter->AppendTagDetections(frame.mnId, frame.mTimeStamp, frame.mTagFrameData);
+    exporter_->AppendTagDetections(frame.mnId, frame.mTimeStamp, frame.tag_frame_data_);
 }
 
 void TagTracker::LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id,
                                             int left_idx, int right_idx,
                                             MapTagData *pTag)
 {
-    if(!mpExporter || !mpExporter->IsEnabled() || !pKF)
+    if(!exporter_ || !exporter_->IsEnabled() || !pKF)
         return;
-    mpExporter->AppendMapTagFirstRegistration(pKF, tag_id, left_idx, right_idx,
+    exporter_->AppendMapTagFirstRegistration(pKF, tag_id, left_idx, right_idx,
                                               pTag);
 }
 
 void TagTracker::LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF)
 {
-    if(!mpExporter || !mpExporter->IsEnabled() || !pKF)
+    if(!exporter_ || !exporter_->IsEnabled() || !pKF)
         return;
-    mpExporter->LogKeyFrameMapTagFirstRegistrations(pKF);
+    exporter_->LogKeyFrameMapTagFirstRegistrations(pKF);
 }
 
 void TagTracker::SaveExports(Map &map)
 {
-    if(!mpExporter || !mpExporter->IsEnabled())
+    if(!exporter_ || !exporter_->IsEnabled())
         return;
-    mpExporter->SaveFinalMap(map, true);
-    mpExporter->CloseTrajectory();
+    exporter_->SaveFinalMap(map, true);
+    exporter_->CloseTrajectory();
 }
 
 void TagTracker::SaveTagMapOnline(Map &map)
 {
-    if(!mpExporter || !mpExporter->IsEnabled())
+    if(!exporter_ || !exporter_->IsEnabled())
         return;
-    mpExporter->SaveTagMapCorners(map, false);
+    exporter_->SaveTagMapCorners(map, false);
 }
 
-bool TagTracker::SaveInitMaps(
+bool TagTracker::SaveInitializationMaps(
     Map &map,
     const std::vector<Eigen::Vector3f> &orb_points,
     const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw)
 {
-    if(!mpExporter || !mpExporter->IsEnabled())
+    if(!exporter_ || !exporter_->IsEnabled())
         return false;
 
     bool ok = true;
-    ok = mpExporter->SaveTagMapCorners(map) && ok;
-    ok = mpExporter->SaveTagInitKeyFrames(map) && ok;
-    ok = mpExporter->SaveOrbInitMap(orb_points, orb_kf_tcw) && ok;
+    ok = exporter_->SaveTagMapCorners(map) && ok;
+    ok = exporter_->SaveTagInitKeyFrames(map) && ok;
+    ok = exporter_->SaveOrbInitMap(orb_points, orb_kf_tcw) && ok;
     return ok;
 }
 
 void TagTracker::SeedLastPose(const Sophus::SE3f &Tcw)
 {
-    mLastTcw = Tcw;
-    mbHasLastTcw = true;
-    mbHasVelocity = false;
+    last_tcw_ = Tcw;
+    has_last_tcw_ = true;
+    has_velocity_ = false;
 }
 
 void TagTracker::ClearMotionCache()
 {
-    mbHasLastTcw = false;
-    mbHasVelocity = false;
-    mnReferenceKFId = 0;
-    mbHasReferenceKF = false;
+    has_last_tcw_ = false;
+    has_velocity_ = false;
+    reference_key_frame_id_ = 0;
+    has_reference_key_frame_ = false;
 }
 
 void TagTracker::ResetExports()
 {
-    if(mpExporter && mpExporter->IsEnabled())
-        mpExporter->ResetSession();
+    if(exporter_ && exporter_->IsEnabled())
+        exporter_->ResetSession();
 }
 
 std::optional<Sophus::SE3f> TagTracker::PredictPoseWithMotionModel() const
 {
-    if(!mbHasVelocity || !mbHasLastTcw)
+    if(!has_velocity_ || !has_last_tcw_)
         return std::nullopt;
 
-    return mVelocity * mLastTcw;
+    return velocity_ * last_tcw_;
 }
 
 void TagTracker::SelectReferenceKeyFrame(const Frame &frame, Map &map)
@@ -141,27 +141,27 @@ void TagTracker::SelectReferenceKeyFrame(const Frame &frame, Map &map)
     (void)frame;
     (void)map;
     // 休眠：完整共视参考 KF 选择尚未接入真实 Map/KF
-    mbHasReferenceKF = false;
-    mnReferenceKFId = 0;
+    has_reference_key_frame_ = false;
+    reference_key_frame_id_ = 0;
 }
 
-bool TagTracker::NeedNewKeyFrame(const Frame &frame, const Map &map) const
+bool TagTracker::ShouldCreateKeyFrame(const Frame &frame, const Map &map) const
 {
     (void)frame;
     (void)map;
     return false;
 }
 
-void TagTracker::UpdateMotionCache(const Sophus::SE3f &Tcw_current)
+void TagTracker::SetMotionCache(const Sophus::SE3f &tcw_current)
 {
-    if(mbHasLastTcw)
+    if(has_last_tcw_)
     {
-        mVelocity = Tcw_current * mLastTcw.inverse();
-        mbHasVelocity = true;
+        velocity_ = tcw_current * last_tcw_.inverse();
+        has_velocity_ = true;
     }
 
-    mLastTcw = Tcw_current;
-    mbHasLastTcw = true;
+    last_tcw_ = tcw_current;
+    has_last_tcw_ = true;
 }
 
 bool TagTracker::Track(Frame &frame, Map &map)

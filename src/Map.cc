@@ -92,7 +92,7 @@ bool Map::AddMapTag(const MapTagPtr &pTag)
     if(!pTag)
         return false;
 
-    const int tag_id = pTag->Id();
+    const int tag_id = pTag->GetId();
     if(tag_id < 0)
         return false;
 
@@ -143,14 +143,14 @@ void Map::ClearMapTags()
         for(const auto &kv : mMapTags)
             tags.push_back(kv.second);
         mMapTags.clear();
-        mbTagInitialized = false;
+        tag_initialized_ = false;
     }
 
     for(const MapTagPtr &pTag : tags)
     {
         if(!pTag)
             continue;
-        const int tag_id = pTag->Id();
+        const int tag_id = pTag->GetId();
         const auto observations = pTag->GetObservations();
         for(const auto &kv : observations)
         {
@@ -193,13 +193,13 @@ std::size_t Map::MapTagsInMap() const
 bool Map::IsTagInitialized() const
 {
     unique_lock<mutex> lock(mMutexMap);
-    return mbTagInitialized;
+    return tag_initialized_;
 }
 
 void Map::SetTagInitialized(bool initialized)
 {
     unique_lock<mutex> lock(mMutexMap);
-    mbTagInitialized = initialized;
+    tag_initialized_ = initialized;
 }
 
 bool Map::CheckMapTagAssociations(std::string *error) const
@@ -219,8 +219,8 @@ bool Map::CheckMapTagAssociations(std::string *error) const
         const MapTagPtr &pTag = tag_kv.second;
         if(!pTag)
             return fail("null MapTag in container");
-        if(pTag->Id() != tag_id)
-            return fail("MapTag container key != Id()");
+        if(pTag->GetId() != tag_id)
+            return fail("MapTag container key != GetId()");
         if(pTag->GetMap() != this)
             return fail("MapTag::GetMap() mismatch");
         if(pTag->IsBad())
@@ -240,7 +240,7 @@ bool Map::CheckMapTagAssociations(std::string *error) const
             if(mspKeyFrames.find(pKF) == mspKeyFrames.end())
                 return fail("observed KF not in Map keyframe set");
 
-            if(idx.leftIndex < 0 && idx.rightIndex < 0)
+            if(idx.left_index_ < 0 && idx.right_index_ < 0)
                 return fail("MapTag observation has no valid index");
 
             KeyFrame::MapTagAssociation assoc;
@@ -248,22 +248,22 @@ bool Map::CheckMapTagAssociations(std::string *error) const
                 return fail("KF missing reverse MapTag association");
             if(assoc.pMapTag != pTag.get())
                 return fail("KF association points to different MapTag");
-            if(assoc.leftObservationIndex != idx.leftIndex ||
-               assoc.rightObservationIndex != idx.rightIndex)
+            if(assoc.leftObservationIndex != idx.left_index_ ||
+               assoc.rightObservationIndex != idx.right_index_)
                 return fail("KF/MapTag observation indices mismatch");
 
-            if(idx.leftIndex < -1 ||
-               idx.leftIndex >= static_cast<int>(pKF->mTagFrameData.left.size()))
+            if(idx.left_index_ < -1 ||
+               idx.left_index_ >= static_cast<int>(pKF->tag_frame_data_.left_.size()))
                 return fail("left observation index out of range");
-            if(idx.rightIndex < -1 ||
-               idx.rightIndex >= static_cast<int>(pKF->mTagFrameData.right.size()))
+            if(idx.right_index_ < -1 ||
+               idx.right_index_ >= static_cast<int>(pKF->tag_frame_data_.right_.size()))
                 return fail("right observation index out of range");
-            if(idx.leftIndex >= 0 &&
-               pKF->mTagFrameData.left[idx.leftIndex].tag_id != tag_id)
-                return fail("left TagObservation.tag_id mismatch");
-            if(idx.rightIndex >= 0 &&
-               pKF->mTagFrameData.right[idx.rightIndex].tag_id != tag_id)
-                return fail("right TagObservation.tag_id mismatch");
+            if(idx.left_index_ >= 0 &&
+               pKF->tag_frame_data_.left_[idx.left_index_].tag_id_ != tag_id)
+                return fail("left TagObservation.tag_id_ mismatch");
+            if(idx.right_index_ >= 0 &&
+               pKF->tag_frame_data_.right_[idx.right_index_].tag_id_ != tag_id)
+                return fail("right TagObservation.tag_id_ mismatch");
         }
     }
 
@@ -282,8 +282,8 @@ bool Map::CheckMapTagAssociations(std::string *error) const
             const KeyFrame::MapTagAssociation &assoc = assoc_kv.second;
             if(!assoc.pMapTag)
                 return fail("KF association has null MapTag");
-            if(assoc.pMapTag->Id() != tag_id)
-                return fail("KF association key != MapTag::Id()");
+            if(assoc.pMapTag->GetId() != tag_id)
+                return fail("KF association key != MapTag::GetId()");
             if(assoc.leftObservationIndex < 0 && assoc.rightObservationIndex < 0)
                 return fail("KF association has no valid index");
 
@@ -299,8 +299,8 @@ bool Map::CheckMapTagAssociations(std::string *error) const
             const auto obs_it = kf_obs.find(pKF);
             if(obs_it == kf_obs.end())
                 return fail("MapTag observations missing KF");
-            if(obs_it->second.leftIndex != assoc.leftObservationIndex ||
-               obs_it->second.rightIndex != assoc.rightObservationIndex)
+            if(obs_it->second.left_index_ != assoc.leftObservationIndex ||
+               obs_it->second.right_index_ != assoc.rightObservationIndex)
                 return fail("reverse observation indices mismatch");
         }
     }

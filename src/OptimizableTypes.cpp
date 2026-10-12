@@ -541,7 +541,7 @@ bool CheckBinarySE3Jacobians(EdgeT *edge, double delta, double tol, double *max_
         return CheckBinarySE3Jacobians(self, delta, tol, &max_err);
     }
 
-    bool TestTagCornerEdgeJacobians(double *max_abs_err)
+    bool CheckTagCornerEdgeJacobians(double *max_abs_err)
     {
         if(max_abs_err)
             *max_abs_err = 0.0;
@@ -630,7 +630,7 @@ bool CheckBinarySE3Jacobians(EdgeT *edge, double delta, double tol, double *max_
         return true;
     }
 
-    bool TestTagCornerInertialEdgeJacobians(double *max_abs_err)
+    bool CheckTagCornerInertialEdgeJacobians(double *max_abs_err)
     {
         if(max_abs_err)
             *max_abs_err = 0.0;

@@ -77,7 +77,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
         mIm.copyTo(im);
         bDrawTags = mbDrawTags;
         if(bDrawTags)
-            tagFrameData = mTagFrameData;
+            tagFrameData = tag_frame_data_;
 
         if(mState==Tracking::NOT_INITIALIZED)
         {
@@ -209,7 +209,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
 
 #ifdef HAS_APRILTAG
     if(bDrawTags)
-        ua_tag::OverlayTags(im, tagFrameData, tag::CameraId::LEFT_OR_MONO, imageScale);
+        tag::OverlayTags(im, tagFrameData, tag::CameraId::LEFT_OR_MONO, imageScale);
 #endif
 
     if(both)
@@ -247,7 +247,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
         bDrawTags = mbDrawTags;
         bFisheyeStereo = mbFisheyeStereo;
         if(bDrawTags)
-            tagFrameData = mTagFrameData;
+            tagFrameData = tag_frame_data_;
 
         if(mState==Tracking::NOT_INITIALIZED)
         {
@@ -397,7 +397,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 
 #ifdef HAS_APRILTAG
     if(bDrawTags)
-        ua_tag::OverlayTags(im, tagFrameData, tag::CameraId::RIGHT, imageScale);
+        tag::OverlayTags(im, tagFrameData, tag::CameraId::RIGHT, imageScale);
 #endif
 
     cv::putText(im, "R", cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
@@ -420,10 +420,10 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
         unique_lock<mutex> lock(mMutex);
         state = mState;
         bDrawTags = mbDrawTags;
-        mImTagDetect.copyTo(imLeft);
-        mImTagDetectRight.copyTo(imRight);
+        im_tag_detect_.copyTo(imLeft);
+        im_tag_detect_right_.copyTo(imRight);
         if(bDrawTags)
-            tagFrameData = mTagFrameData;
+            tagFrameData = tag_frame_data_;
     }
 
     if(imLeft.empty() && imRight.empty())
@@ -443,7 +443,7 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
             cv::cvtColor(im, im, cv::COLOR_GRAY2BGR);
 #ifdef HAS_APRILTAG
         if(bDrawTags)
-            ua_tag::OverlayTags(im, tagFrameData, cam, imageScale);
+            tag::OverlayTags(im, tagFrameData, cam, imageScale);
 #else
         (void)cam;
         (void)bDrawTags;
@@ -475,8 +475,8 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
 
     std::stringstream s;
     s << " TAG DETECT (detector input";
-    s << ", gamma if enabled) | L=" << tagFrameData.left.size()
-      << " R=" << tagFrameData.right.size();
+    s << ", gamma if enabled) | L=" << tagFrameData.left_.size()
+      << " R=" << tagFrameData.right_.size();
     if(state==Tracking::NOT_INITIALIZED)
         s << " | TRYING TO INITIALIZE";
     else if(state==Tracking::OK)
@@ -541,17 +541,17 @@ void FrameDrawer::Update(Tracking *pTracker)
     mThDepth = pTracker->mCurrentFrame.mThDepth;
     mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
 
-    mbDrawTags = pTracker->mbTagShowInOrbViewer;
-    mImTagDetect.release();
-    mImTagDetectRight.release();
+    mbDrawTags = pTracker->tag_show_in_orb_viewer_;
+    im_tag_detect_.release();
+    im_tag_detect_right_.release();
     if(mbDrawTags)
     {
-        mTagFrameData = pTracker->mCurrentFrame.mTagFrameData;
-        pTracker->mCurrentFrame.mImTagDetect.copyTo(mImTagDetect);
-        pTracker->mCurrentFrame.mImTagDetectRight.copyTo(mImTagDetectRight);
+        tag_frame_data_ = pTracker->mCurrentFrame.tag_frame_data_;
+        pTracker->mCurrentFrame.im_tag_detect_.copyTo(im_tag_detect_);
+        pTracker->mCurrentFrame.im_tag_detect_right_.copyTo(im_tag_detect_right_);
     }
     else
-        mTagFrameData.Clear();
+        tag_frame_data_.Clear();
 
     // PinHole 经典双目 Nleft==-1：mvpMapPoints 仅覆盖左目；鱼眼双目才是 left+right
     mbFisheyeStereo = (pTracker->mCurrentFrame.Nleft != -1);

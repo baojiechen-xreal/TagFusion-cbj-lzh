@@ -192,7 +192,7 @@ protected:
     std::set<KeyFrame*> mspKeyFrames;
 
     MapTagContainer mMapTags;
-    bool mbTagInitialized = false;
+    bool tag_initialized_ = false;
 
     // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
     std::vector<MapPoint*> mvpBackupMapPoints;

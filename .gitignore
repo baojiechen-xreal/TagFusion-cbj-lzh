@@ -1,0 +1,60 @@
+# Avoid broad patterns such as *.txt or time*: they silently drop sources
+# (CMakeLists.txt, timestamps.txt, DUtils/Timestamp.cpp, g2o timeutil.cpp).
+
+# ===================== Build artifacts =====================
+/build/
+/build_*/
+/lib/
+Thirdparty/*/build/
+Thirdparty/*/lib/
+Thirdparty/g2o/config.h
+/Testing/
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+*.o
+*.so
+*.a
+
+# Executables are written into the source tree (no extension)
+Examples/TagFusion/**/*_tag
+Examples/TagFusion/test/test_tag_corner_jac
+scripts/ethz_tag_detect
+scripts/ethz_tag_enhance_eval
+
+# ===================== Datasets / large files =====================
+*.bag
+*.db3
+*.mcap
+*.bin
+*.zip
+*.tar.gz
+!Vocabulary/ORBvoc.txt.tar.gz
+Vocabulary/ORBvoc.txt
+*.pgm
+*.ply
+*.pcd
+*.pdf
+**/raw_data/
+/01-1/
+
+# ===================== Run outputs =====================
+*.csv
+!Thirdparty/**/*.csv
+*.log
+log.txt
+**/tag_export*/
+scripts/*_out/
+CameraTrajectory*.txt
+KeyFrameTrajectory*.txt
+OnlineCameraTrajectory*.txt
+Examples/TagFusion/**/f_*.txt
+Examples/TagFusion/**/kf_*.txt
+
+# ===================== Misc =====================
+/review/
+Untitled
+__pycache__/
+*.pyc
+.vscode/
+.idea/

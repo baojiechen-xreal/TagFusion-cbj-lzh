@@ -4,28 +4,28 @@
 
 namespace ORB_SLAM3
 {
-namespace ua_tag
+namespace tag
 {
 
-TagPoseLogger::TagPoseLogger(const std::string &csvPath)
-    : mFile(csvPath.c_str(), std::ios::out | std::ios::trunc)
+TagPoseLogger::TagPoseLogger(const std::string &csv_path)
+    : file_(csv_path.c_str(), std::ios::out | std::ios::trunc)
 {
-    if(mFile.is_open())
+    if(file_.is_open())
     {
-        mFile << std::setprecision(17);
+        file_ << std::setprecision(17);
         WriteHeader();
     }
 }
 
 TagPoseLogger::~TagPoseLogger()
 {
-    if(mFile.is_open())
-        mFile.close();
+    if(file_.is_open())
+        file_.close();
 }
 
 void TagPoseLogger::WriteHeader()
 {
-    mFile
+    file_
         << "frame_id,timestamp,tag_id,"
         << "has_pose_estimate,selected_candidate,ambiguity_ratio,"
         // candidate 0
@@ -47,15 +47,15 @@ void TagPoseLogger::WriteCandidate(const tag::TagPoseCandidate &cand, bool valid
     if(!valid)
     {
         // 14 fields: valid + err + t(3) + R(9)
-        mFile << "0,,,,,,,,,,,,,";
+        file_ << "0,,,,,,,,,,,,,";
         return;
     }
 
-    const Eigen::Matrix3f R = cand.T_ct.rotationMatrix();
-    const Eigen::Vector3f t = cand.T_ct.translation();
+    const Eigen::Matrix3f R = cand.t_ct_.rotationMatrix();
+    const Eigen::Vector3f t = cand.t_ct_.translation();
 
-    mFile << "1,"
-          << cand.reprojection_error << ","
+    file_ << "1,"
+          << cand.reprojection_error_ << ","
           << t[0] << "," << t[1] << "," << t[2] << ","
           << R(0, 0) << "," << R(0, 1) << "," << R(0, 2) << ","
           << R(1, 0) << "," << R(1, 1) << "," << R(1, 2) << ","
@@ -66,40 +66,40 @@ void TagPoseLogger::LogFrame(size_t frame_id,
                              double timestamp,
                              const std::vector<tag::TagObservation> &tags)
 {
-    if(!mFile.is_open())
+    if(!file_.is_open())
         return;
 
     for(size_t i = 0; i < tags.size(); ++i)
     {
         const tag::TagObservation &tag = tags[i];
-        const bool has_pose = tag.pose_estimate.has_value();
-        const int selected = has_pose ? tag.pose_estimate->selected_candidate : -1;
-        const float ambiguity_ratio = has_pose ? tag.pose_estimate->ambiguity_ratio : -1.0f;
+        const bool has_pose = tag.pose_estimate_.has_value();
+        const int selected = has_pose ? tag.pose_estimate_->selected_candidate_ : -1;
+        const float ambiguity_ratio = has_pose ? tag.pose_estimate_->ambiguity_ratio_ : -1.0f;
 
-        mFile << frame_id << ","
+        file_ << frame_id << ","
               << timestamp << ","
-              << tag.tag_id << ","
+              << tag.tag_id_ << ","
               << (has_pose ? 1 : 0) << ","
               << selected << ","
               << ambiguity_ratio << ",";
 
         if(has_pose)
         {
-            WriteCandidate(tag.pose_estimate->candidates[0],
-                           tag.pose_estimate->candidates[0].valid);
-            mFile << ",";
-            WriteCandidate(tag.pose_estimate->candidates[1],
-                           tag.pose_estimate->candidates[1].valid);
+            WriteCandidate(tag.pose_estimate_->candidates_[0],
+                           tag.pose_estimate_->candidates_[0].valid_);
+            file_ << ",";
+            WriteCandidate(tag.pose_estimate_->candidates_[1],
+                           tag.pose_estimate_->candidates_[1].valid_);
         }
         else
         {
             WriteCandidate(tag::TagPoseCandidate{}, false);
-            mFile << ",";
+            file_ << ",";
             WriteCandidate(tag::TagPoseCandidate{}, false);
         }
-        mFile << "\n";
+        file_ << "\n";
     }
 }
 
-}  // namespace ua_tag
+}  // namespace tag
 }  // namespace ORB_SLAM3

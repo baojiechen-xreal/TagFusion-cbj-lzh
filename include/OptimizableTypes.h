@@ -296,7 +296,7 @@ public:
 };
 
 // 合成场景下校验 Tag 角点边解析 Jacobian（供单测 / 调试调用）
-bool TestTagCornerEdgeJacobians(double *max_abs_err = nullptr);
+bool CheckTagCornerEdgeJacobians(double *max_abs_err = nullptr);
 
 }
 

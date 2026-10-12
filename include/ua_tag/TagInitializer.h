@@ -32,7 +32,7 @@ public:
     using TagContainer = std::unordered_map<int, MapTagPtr>;
 
     // 初始化模式：由 Tracking 按 mSensor 显式传入
-    enum class InitMode : std::uint8_t
+    enum class InitializationMode : std::uint8_t
     {
         Monocular = 0,     // 两帧路径（共视检查 / 单帧+第二帧 / 双帧联合）
         Stereo = 1         // 单帧即可（STEREO / IMU_STEREO）
@@ -84,7 +84,7 @@ public:
 
 public:
     // 从 settings yaml 读取 Tag.size、Tag.verbose
-    explicit TagInitializer(const std::string &settingsFile);
+    explicit TagInitializer(const std::string &settings_file);
 
     // 仅计算：写 Result + 必要时回写 Frame 消歧/位姿；不写入 Map / 不关联 KeyFrame。
     // 必须在 new KeyFrame(Frame) 之前调用，以便 KF 拷贝到最终 TagFrameData。
@@ -94,7 +94,7 @@ public:
     //     1) 对 first_frame 单帧建图，成功后再用 motion-only BA 估计 second_frame 并注册两帧
     //     2) 上述失败则用已算好的共视做双帧联合初始化
     bool TryInitialize(Frame &first_frame, Frame &second_frame, Result &result,
-                       InitMode mode);
+                       InitializationMode mode);
 
     // 仅提交：将 Result 中的 MapTag 写入 ORB Map，并与真实 KeyFrame 建立双向关联。
     // 必须在 KeyFrame 已创建且 AddKeyFrame 之后、InsertKeyFrame 之前调用。
@@ -126,7 +126,7 @@ private:
     };
     using CommonTagObsMap = std::unordered_map<int, CommonTagPair>;
 
-    // 非离群且 pose_estimate 中含两个有效 IPPE 候选
+    // 非离群且 pose_estimate_ 中含两个有效 IPPE 候选
     static bool HasTwoValidIppeCandidates(const TagObservation &obs) noexcept;
 
     // 按 tag_id 收集观测；同 id 时左目优先于右目（要求两个有效 IPPE 候选）
@@ -146,7 +146,7 @@ private:
     // 共同观测 Tag 的去畸变角点在两帧之间的平均欧式像素位移
     static float ComputeMeanCornerPixelDisplacement(const CommonTagObsMap &common_obs);
 
-    // GeometricCamera::project vs corners_raw（原图像素）的 RMSE
+    // GeometricCamera::project vs corners_raw_（原图像素）的 RMSE
     static float ComputeTagCornerReprojRmse(const Sophus::SE3f &T_ct,
                                             const std::array<cv::Point2f, 4> &corners_obs,
                                             GeometricCamera *pCamera,
@@ -161,7 +161,7 @@ private:
 
     // 单帧建图成功后：motion-only BA 估计 second_frame 位姿，并像双帧一样注册两帧
     // （Tcw_current={I,Tcw_2}，keyframes 两帧，tags 上追加 second 观测）
-    bool CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
+    bool CompleteSingleFrameInitializationWithSecondFrame(Frame &first_frame,
                                                 Frame &second_frame,
                                                 Result &result);
 
@@ -170,13 +170,13 @@ private:
                                 const CommonTagObsMap &common_obs, Result &result);
 
     // 从 settings yaml 的 Tag.size / Tag.size_by_id 读取（米）
-    double mTagSize = 0.16;
-    std::map<int, double> mTagSizeById;
+    double tag_size_ = 0.16;
+    std::map<int, double> tag_size_by_id_;
 
     double GetTagSize(int tag_id) const;
 
     // 从 settings yaml 的 Tag.verbose 读取；为 true 时打印初始化日志
-    bool mbVerbose = false;
+    bool verbose_ = false;
 };
 
 }  // namespace tag

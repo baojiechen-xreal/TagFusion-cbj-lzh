@@ -36,8 +36,8 @@ public:
     TagMapExporter(const TagMapExporter &) = delete;
     TagMapExporter &operator=(const TagMapExporter &) = delete;
 
-    bool IsEnabled() const noexcept { return mbEnabled; }
-    const std::string &OutputDir() const noexcept { return mOutputDir; }
+    bool IsEnabled() const noexcept { return enabled_; }
+    const std::string &GetOutputDir() const noexcept { return output_dir_; }
 
     // 追加一帧相机轨迹（输入 Tcw；落盘 TUM：timestamp tx ty tz qx qy qz qw，位姿为 Twc）
     void AppendCameraPose(unsigned long frame_id,
@@ -50,7 +50,7 @@ public:
                              const TagFrameData &frame_data);
 
     // 某个 MapTag 首次注册进地图时：记录该 KF 上观测面积、距离、光轴–平面/法向夹角
-    // left_idx / right_idx 为 KF.mTagFrameData 下标，无观测则为 -1
+    // left_idx / right_idx 为 KF.tag_frame_data_ 下标，无观测则为 -1
     void AppendMapTagFirstRegistration(KeyFrame *pKF,
                                        int tag_id,
                                        int left_idx,
@@ -97,12 +97,12 @@ private:
                           const std::vector<Eigen::Vector3f> &orb_points,
                           bool verbose) const;
 
-    std::string mOutputDir;
-    TagFactorWeightParams mFactorWeight;
-    bool mbEnabled{false};
-    mutable std::ofstream mTrajFile;
-    mutable std::ofstream mDetFile;
-    mutable std::ofstream mFirstRegFile;
+    std::string output_dir_;
+    TagFactorWeightParams factor_weight_;
+    bool enabled_{false};
+    mutable std::ofstream trajectory_file_;
+    mutable std::ofstream detection_file_;
+    mutable std::ofstream first_registration_file_;
 };
 
 }  // namespace tag

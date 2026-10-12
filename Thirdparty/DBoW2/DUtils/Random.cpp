@@ -9,16 +9,16 @@
  */
 
 #include "Random.h"
-#include "Timestamp.h"
 #include <cstdlib>
+#include <sys/time.h>
 using namespace std;
 
 bool DUtils::Random::m_already_seeded = false;
 
 void DUtils::Random::SeedRand(){
-	Timestamp time;
-	time.setToCurrentTime();
-	srand((unsigned)time.getFloatTime()); 
+	struct timeval ts;
+	gettimeofday(&ts, 0);
+	srand(static_cast<unsigned>(ts.tv_sec * 1000000u + ts.tv_usec));
 }
 
 void DUtils::Random::SeedRandOnce()

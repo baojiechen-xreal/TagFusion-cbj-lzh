@@ -502,7 +502,8 @@ void MapDrawer::DrawTagMap(const bool bDrawTags, const bool bDrawTagKFs)
                 glDisable(GL_DEPTH_TEST);
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(0.1f, 0.1f, 0.1f, 1.0f);
-                pangolin::GlFont::I().Text("id:%d", map_tag->Id()).Draw(
+                static pangolin::GlFont font(18.0f);
+                font.Text("id:%d", map_tag->GetId()).Draw(
                     center.x(), center.y(), center.z());
                 glEnable(GL_DEPTH_TEST);
             }

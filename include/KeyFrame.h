@@ -264,7 +264,7 @@ public:
     int TrackedMapPoints(const int &minObs);
     MapPoint* GetMapPoint(const size_t &idx);
 
-    // MapTag 关联：角点测量只在 mTagFrameData；此处存 MapTag* + 左右观测索引
+    // MapTag 关联：角点测量只在 tag_frame_data_；此处存 MapTag* + 左右观测索引
     // 所有权：MapTagData* 非拥有；完整双向更新只允许经本类接口
     struct MapTagAssociation
     {
@@ -455,7 +455,7 @@ public:
 
     // AprilTag observations copied from the source Frame at keyframe creation.
     // 唯一 Tag 角点测量源。
-    tag::TagFrameData mTagFrameData;
+    tag::TagFrameData tag_frame_data_;
 
     std::vector <KeyFrame*> mvpLoopCandKFs;
     std::vector <KeyFrame*> mvpMergeCandKFs;

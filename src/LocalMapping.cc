@@ -71,14 +71,14 @@ void LocalMapping::SetLoopCloser(LoopClosing* pLoopCloser)
 
 void LocalMapping::SetTagLocalBAParams(const tag::TagLocalBAParams &params)
 {
-    mTagLocalBAParams = params;
-    if(mTagLocalBAParams.enable)
+    tag_local_ba_params_ = params;
+    if(tag_local_ba_params_.enable)
     {
         std::cout << "Tag LocalBA enabled"
-                  << " (optimize_active=" << (mTagLocalBAParams.optimize_active ? 1 : 0)
-                  << ", corner_sigma=" << mTagLocalBAParams.corner_sigma
-                  << ", min_inlier_corners=" << mTagLocalBAParams.min_inlier_corners
-                  << ", factor_weight=" << (mTagLocalBAParams.factor_weight.enable ? 1 : 0)
+                  << " (optimize_active=" << (tag_local_ba_params_.optimize_active ? 1 : 0)
+                  << ", corner_sigma=" << tag_local_ba_params_.corner_sigma
+                  << ", min_inlier_corners=" << tag_local_ba_params_.min_inlier_corners
+                  << ", factor_weight=" << (tag_local_ba_params_.factor_weight.enable ? 1 : 0)
                   << ")" << std::endl;
     }
 }
@@ -190,14 +190,14 @@ bool LocalMapping::ProcessOneKeyFrame()
                 mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),
                 num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA,
                 bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2(),
-                mTagLocalBAParams, &tagLbaStats);
+                tag_local_ba_params_, &tagLbaStats);
             b_doneLBA = true;
         }
         else
         {
             tag::TagLocalBAStats tagLbaStats;
             Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA,
-                                             mTagLocalBAParams, &tagLbaStats);
+                                             tag_local_ba_params_, &tagLbaStats);
             b_doneLBA = true;
         }
     }
@@ -358,7 +358,7 @@ void LocalMapping::ProcessNewKeyFrame()
     mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
 
     // 建立 KF ↔ MapTag 双向关联，并扩展 Tag 地图（新 ID → CANDIDATE）
-    ProcessTagObservations(mpCurrentKeyFrame);
+    AssociateTagObservations(mpCurrentKeyFrame);
 }
 
 bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
@@ -367,17 +367,17 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
     if(!pTag || !pKF)
         return false;
 
-    const int tag_id = pTag->Id();
-    const int n_left = static_cast<int>(pKF->mTagFrameData.left.size());
-    const int n_right = static_cast<int>(pKF->mTagFrameData.right.size());
+    const int tag_id = pTag->GetId();
+    const int n_left = static_cast<int>(pKF->tag_frame_data_.left_.size());
+    const int n_right = static_cast<int>(pKF->tag_frame_data_.right_.size());
 
     const tag::TagObservation *obs_left =
         (leftIndex >= 0 && leftIndex < n_left)
-            ? &pKF->mTagFrameData.left[leftIndex]
+            ? &pKF->tag_frame_data_.left_[leftIndex]
             : nullptr;
     const tag::TagObservation *obs_right =
         (rightIndex >= 0 && rightIndex < n_right)
-            ? &pKF->mTagFrameData.right[rightIndex]
+            ? &pKF->tag_frame_data_.right_[rightIndex]
             : nullptr;
 
     if(!obs_left && !obs_right)
@@ -398,7 +398,7 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
         if(!obs)
             return false;
 
-        if(!obs->pose_estimate.has_value())
+        if(!obs->pose_estimate_.has_value())
         {
             std::cout << "[TagLM] InitializeMapTagPose fail"
                       << " tag_id=" << tag_id
@@ -407,31 +407,31 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
                       << " cam=" << cam_src
                       << " left_idx=" << leftIndex
                       << " right_idx=" << rightIndex
-                      << " detect_outlier=" << (obs->is_detect_outlier ? 1 : 0)
-                      << " opt_outlier=" << (obs->is_opt_outlier ? 1 : 0)
+                      << " detect_outlier=" << (obs->is_detect_outlier_ ? 1 : 0)
+                      << " opt_outlier=" << (obs->is_optimization_outlier_ ? 1 : 0)
                       << std::endl;
             return false;
         }
 
         if(!obs->IsAmbiguityResolved())
         {
-            const tag::TagPoseEstimate &est = *obs->pose_estimate;
+            const tag::TagPoseEstimate &est = *obs->pose_estimate_;
             std::cout << "[TagLM] InitializeMapTagPose fail"
                       << " tag_id=" << tag_id
                       << " kf_id=" << pKF->mnId
                       << " reason=ambiguity_unresolved"
                       << " cam=" << cam_src
-                      << " selected=" << est.selected_candidate
-                      << " ambiguity_ratio=" << est.ambiguity_ratio
-                      << " cand0_valid=" << (est.candidates[0].valid ? 1 : 0)
-                      << " cand1_valid=" << (est.candidates[1].valid ? 1 : 0)
+                      << " selected=" << est.selected_candidate_
+                      << " ambiguity_ratio=" << est.ambiguity_ratio_
+                      << " cand0_valid=" << (est.candidates_[0].valid_ ? 1 : 0)
+                      << " cand1_valid=" << (est.candidates_[1].valid_ ? 1 : 0)
                       << " left_idx=" << leftIndex
                       << " right_idx=" << rightIndex
                       << std::endl;
             return false;
         }
 
-        const tag::TagPoseCandidate *sel = obs->pose_estimate->Selected();
+        const tag::TagPoseCandidate *sel = obs->pose_estimate_->GetSelectedCandidate();
         if(!sel)
         {
             std::cout << "[TagLM] InitializeMapTagPose fail"
@@ -444,14 +444,14 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
         }
 
         // 若为右目，则需要将 Tag 坐标系转换到左目
-        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
-            obs->camera_id, sel->T_ct, pKF->GetRelativePoseTlr());
+        const Sophus::SE3f T_cL_t = tag::ConvertTagPoseToLeftCamera(
+            obs->camera_id_, sel->t_ct_, pKF->GetRelativePoseTlr());
         // T_wt = Twc * T_cL_t（左目锚定）
         pTag->SetPose(pKF->GetPoseInverse() * T_cL_t);
-        if(const tag::TagPoseCandidate *mir = obs->pose_estimate->Unselected())
+        if(const tag::TagPoseCandidate *mir = obs->pose_estimate_->GetUnselectedCandidate())
         {
-            const Sophus::SE3f T_cL_m = tag::ExpressTagPoseInLeftCamera(
-                obs->camera_id, mir->T_ct, pKF->GetRelativePoseTlr());
+            const Sophus::SE3f T_cL_m = tag::ConvertTagPoseToLeftCamera(
+                obs->camera_id_, mir->t_ct_, pKF->GetRelativePoseTlr());
             pTag->SetMirrorPose(pKF->GetPoseInverse() * T_cL_m);
         }
         // 已消歧的单帧初值：直接 ACTIVE，可进 LBA / PoseOpt（勿停在 CANDIDATE）
@@ -463,8 +463,8 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
                   << " kf_id=" << pKF->mnId
                   << " cam=" << cam_src
                   << " state=ACTIVE"
-                  << " selected=" << obs->pose_estimate->selected_candidate
-                  << " reproj_err=" << sel->reprojection_error
+                  << " selected=" << obs->pose_estimate_->selected_candidate_
+                  << " reproj_err=" << sel->reprojection_error_
                   << " t_w=[" << tw.x() << ", " << tw.y() << ", " << tw.z() << "]"
                   << std::endl;
         return true;
@@ -490,7 +490,7 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     if(pTag->GetState() != tag::MapTagState::CANDIDATE)
         return false;
 
-    const int tag_id = pTag->Id();
+    const int tag_id = pTag->GetId();
     const float tag_size = pTag->GetTagSize();
     if(tag_id < 0 || tag_size <= 0.0f)
         return false;
@@ -517,21 +517,21 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     // 按照 Tag ID 从 KF 中挑选可测量的观测
     auto pickMeasurableObs = [](KeyFrame *pKF, int tid) -> const tag::TagObservation * {
         const tag::TagObservation *left =
-            pKF->mTagFrameData.Find(tid, tag::CameraId::LEFT_OR_MONO);
+            pKF->tag_frame_data_.Find(tid, tag::CameraId::LEFT_OR_MONO);
         if(left && left->IsDetectValid())
             return left;
         const tag::TagObservation *right =
-            pKF->mTagFrameData.Find(tid, tag::CameraId::RIGHT);
+            pKF->tag_frame_data_.Find(tid, tag::CameraId::RIGHT);
         if(right && right->IsDetectValid())
             return right;
         return nullptr;
     };
 
     auto hasTwoValidIppe = [](const tag::TagObservation *obs) -> bool {
-        if(!obs || !obs->pose_estimate.has_value())
+        if(!obs || !obs->pose_estimate_.has_value())
             return false;
-        const auto &est = *obs->pose_estimate;
-        return est.candidates[0].valid && est.candidates[1].valid;
+        const auto &est = *obs->pose_estimate_;
+        return est.candidates_[0].valid_ && est.candidates_[1].valid_;
     };
 
     // 从首帧起，相邻有效 KF 基线 > 0.07m；且该 KF 上需有可测量观测
@@ -570,7 +570,7 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     }
 
     std::vector<cv::Point3f> object_pts;
-    ua_tag::BuildSquareObjectPoints(static_cast<double>(tag_size), object_pts);
+    tag::BuildSquareObjectPoints(static_cast<double>(tag_size), object_pts);
 
     struct IppeHyp
     {
@@ -585,9 +585,9 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     for(KeyFrame *pKF : valid_kfs)
     {
         const tag::TagObservation *left =
-            pKF->mTagFrameData.Find(tag_id, tag::CameraId::LEFT_OR_MONO);
+            pKF->tag_frame_data_.Find(tag_id, tag::CameraId::LEFT_OR_MONO);
         const tag::TagObservation *right =
-            pKF->mTagFrameData.Find(tag_id, tag::CameraId::RIGHT);
+            pKF->tag_frame_data_.Find(tag_id, tag::CameraId::RIGHT);
         const tag::TagObservation *src = nullptr;
         if(hasTwoValidIppe(left))
             src = left;
@@ -606,11 +606,11 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
         [&](const IppeHyp &hyp,
             std::array<Eigen::Vector3f, 4> &corners_w) -> bool {
         const tag::TagPoseCandidate &cand =
-            hyp.obs->pose_estimate->candidates[hyp.cand_idx];
-        if(!cand.valid)
+            hyp.obs->pose_estimate_->candidates_[hyp.cand_idx];
+        if(!cand.valid_)
             return false;
-        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
-            hyp.obs->camera_id, cand.T_ct, hyp.pKF->GetRelativePoseTlr());
+        const Sophus::SE3f T_cL_t = tag::ConvertTagPoseToLeftCamera(
+            hyp.obs->camera_id_, cand.t_ct_, hyp.pKF->GetRelativePoseTlr());
         const Sophus::SE3f T_wt = hyp.pKF->GetPoseInverse() * T_cL_t;
         for(int k = 0; k < 4; ++k)
         {
@@ -624,11 +624,11 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
 
     auto recomputeWorldPose = [&](const IppeHyp &hyp, Sophus::SE3f &T_wt) -> bool {
         const tag::TagPoseCandidate &cand =
-            hyp.obs->pose_estimate->candidates[hyp.cand_idx];
-        if(!cand.valid)
+            hyp.obs->pose_estimate_->candidates_[hyp.cand_idx];
+        if(!cand.valid_)
             return false;
-        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
-            hyp.obs->camera_id, cand.T_ct, hyp.pKF->GetRelativePoseTlr());
+        const Sophus::SE3f T_cL_t = tag::ConvertTagPoseToLeftCamera(
+            hyp.obs->camera_id_, cand.t_ct_, hyp.pKF->GetRelativePoseTlr());
         T_wt = hyp.pKF->GetPoseInverse() * T_cL_t;
         return true;
     };
@@ -652,7 +652,7 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
             GeometricCamera *cam = nullptr;
             Sophus::SE3f T_cam_w;
             const Sophus::SE3f Tcw = pKF->GetPose();  // left <- world
-            if(obs->camera_id == tag::CameraId::RIGHT)
+            if(obs->camera_id_ == tag::CameraId::RIGHT)
             {
                 if(!pKF->mpCamera2)
                     continue;
@@ -681,9 +681,9 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
                 const cv::Point2f uv =
                     cam->project(cv::Point3f(P_c.x(), P_c.y(), P_c.z()));
                 const double dx =
-                    static_cast<double>(uv.x - obs->corners_raw[k].x);
+                    static_cast<double>(uv.x - obs->corners_raw_[k].x);
                 const double dy =
-                    static_cast<double>(uv.y - obs->corners_raw[k].y);
+                    static_cast<double>(uv.y - obs->corners_raw_[k].y);
                 sum_sq += dx * dx + dy * dy;
             }
             if(!ok)
@@ -781,9 +781,9 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
         pTag->SetMirrorPose(T_wt_mirror);
 
     const Sophus::SE3f T_ct_sel =
-        best.obs->pose_estimate->candidates[best.cand_idx].T_ct;
-    best.pKF->mTagFrameData.WriteBackSelectedCandidate(
-        tag_id, best.obs->camera_id, best.cand_idx, &T_ct_sel);
+        best.obs->pose_estimate_->candidates_[best.cand_idx].t_ct_;
+    best.pKF->tag_frame_data_.WriteBackSelectedCandidate(
+        tag_id, best.obs->camera_id_, best.cand_idx, &T_ct_sel);
 
     const Eigen::Vector3f tw = T_wt.translation();
     std::cout << "[TagLM] multi-frame disambiguate ok"
@@ -797,7 +797,7 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     return true;
 }
 
-void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
+void LocalMapping::AssociateTagObservations(KeyFrame *pKF)
 {
     if(!pKF)
         return;
@@ -806,7 +806,7 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
     if(!pMap || !pMap->IsTagInitialized())
         return;
 
-    if(pKF->mTagFrameData.Empty())
+    if(pKF->tag_frame_data_.IsEmpty())
         return;
 
     struct PendingObservation
@@ -818,19 +818,19 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
     // 按照 Tag ID 聚合当前KF中的观测，同时进行简单的有效性检查
     std::unordered_map<int, PendingObservation> pending;
 
-    for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.left.size()); ++i)
+    for(int i = 0; i < static_cast<int>(pKF->tag_frame_data_.left_.size()); ++i)
     {
-        const tag::TagObservation &obs = pKF->mTagFrameData.left[i];
+        const tag::TagObservation &obs = pKF->tag_frame_data_.left_[i];
         if(!obs.IsDetectValid())
             continue;
-        pending[obs.tag_id].leftIndex = i;
+        pending[obs.tag_id_].leftIndex = i;
     }
-    for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.right.size()); ++i)
+    for(int i = 0; i < static_cast<int>(pKF->tag_frame_data_.right_.size()); ++i)
     {
-        const tag::TagObservation &obs = pKF->mTagFrameData.right[i];
+        const tag::TagObservation &obs = pKF->tag_frame_data_.right_[i];
         if(!obs.IsDetectValid())
             continue;
-        pending[obs.tag_id].rightIndex = i;
+        pending[obs.tag_id_].rightIndex = i;
     }
 
     if(pending.empty())
@@ -888,7 +888,7 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
 
         if(!pKF->AddMapTag(pTag.get(), left_idx, right_idx))
         {
-            if(created && pTag->Observations() == 0)
+            if(created && pTag->GetObservationCount() == 0)
                 pMap->EraseMapTag(tag_id);
             continue;
         }

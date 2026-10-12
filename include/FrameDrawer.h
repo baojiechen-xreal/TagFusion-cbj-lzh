@@ -90,8 +90,8 @@ protected:
 
     // Tag.detect 叠加到 ORB Current Frame 窗（Tag.show_in_orb_viewer）
     bool mbDrawTags;
-    tag::TagFrameData mTagFrameData;
-    cv::Mat mImTagDetect, mImTagDetectRight;
+    tag::TagFrameData tag_frame_data_;
+    cv::Mat im_tag_detect_, im_tag_detect_right_;
 
     // true: 鱼眼双目（Nleft!=-1，左右特征拼在同一 Frame）；false: PinHole 经典双目
     bool mbFisheyeStereo;

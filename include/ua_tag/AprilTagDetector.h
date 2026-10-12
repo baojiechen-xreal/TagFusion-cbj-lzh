@@ -15,12 +15,12 @@ namespace ORB_SLAM3
 class Settings;
 class GeometricCamera;
 
-namespace ua_tag
+namespace tag
 {
 
 // 相机模型：角点去畸变 + IPPE PnP
-// 检测在原图上进行；corners_raw 为原图像素；
-// corners_undistorted 为与 GeometricCamera::unproject 一致的理想针孔像素（供 IPPE 初值）
+// 检测在原图上进行；corners_raw_ 为原图像素；
+// corners_undistorted_ 为与 GeometricCamera::unproject 一致的理想针孔像素（供 IPPE 初值）
 struct CameraModel
 {
     double fx = 0.0;
@@ -75,7 +75,7 @@ struct AprilTagDetectorConfig
     bool IsIgnored(int tag_id) const;
 
     // 从 ORB-SLAM3 settings yaml 读取 Tag.*（缺省保留默认值）
-    static AprilTagDetectorConfig FromYaml(const std::string &settingsFile);
+    static AprilTagDetectorConfig FromYaml(const std::string &settings_file);
 };
 
 // AprilTag 角点顺序与 OpenCV IPPE_SQUARE 物体点一致：
@@ -109,7 +109,7 @@ class AprilTagDetector
 {
 public:
     explicit AprilTagDetector(const AprilTagDetectorConfig &config = AprilTagDetectorConfig());
-    explicit AprilTagDetector(const std::string &settingsFile);
+    explicit AprilTagDetector(const std::string &settings_file);
     ~AprilTagDetector();
 
     // 禁止拷贝：Impl 持有 apriltag 裸指针资源，拷贝会导致双重释放
@@ -122,7 +122,7 @@ public:
     // 注入 ORB GeometricCamera：鱼眼去畸变/重投影误差与 BA 共用 project/unproject
     void SetGeometricCamera(GeometricCamera *camera);
 
-    // 在原图（可选 gamma）上检测；填充 corners_raw 与 corners_undistorted（不做 IPPE）
+    // 在原图（可选 gamma）上检测；填充 corners_raw_ 与 corners_undistorted_（不做 IPPE）
     // camera_id：写入观测所属相机；geometric_camera 非空时覆盖默认模型做去畸变（右目用）
     bool DetectCorners(const cv::Mat &image,
                        std::vector<tag::TagObservation> &observations,
@@ -144,10 +144,10 @@ public:
 
 private:
     struct Impl;
-    Impl *mpImpl;
+    Impl *impl_;
 };
 
-}  // namespace ua_tag
+}  // namespace tag
 }  // namespace ORB_SLAM3
 
 #endif

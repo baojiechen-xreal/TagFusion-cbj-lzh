@@ -150,7 +150,7 @@ protected:
     void CreateNewMapPoints();
 
     // KF 入 Map 后：创建/查找 MapTag，并与当前 KF 建立双向关联
-    void ProcessTagObservations(KeyFrame *pKF);
+    void AssociateTagObservations(KeyFrame *pKF);
     // 用 KF 上消歧后的 IPPE 估计 MapTag 世界位姿初值（优先左目）
     bool InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
                               int leftIndex, int rightIndex) const;
@@ -183,7 +183,7 @@ protected:
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
 
-    tag::TagLocalBAParams mTagLocalBAParams;
+    tag::TagLocalBAParams tag_local_ba_params_;
 
     std::list<KeyFrame*> mlNewKeyFrames;
 

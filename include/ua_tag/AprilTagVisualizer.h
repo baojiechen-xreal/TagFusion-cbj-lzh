@@ -8,7 +8,7 @@
 
 namespace ORB_SLAM3
 {
-namespace ua_tag
+namespace tag
 {
 
 // 在单张图上绘制指定相机观测（默认左目/单目）
@@ -37,7 +37,7 @@ bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
 // 确保输出目录存在；成功返回 true
 bool EnsureDir(const std::string &dirPath);
 
-}  // namespace ua_tag
+}  // namespace tag
 }  // namespace ORB_SLAM3
 
 #endif

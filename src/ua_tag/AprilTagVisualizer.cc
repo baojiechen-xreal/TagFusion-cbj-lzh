@@ -10,7 +10,7 @@
 
 namespace ORB_SLAM3
 {
-namespace ua_tag
+namespace tag
 {
 
 namespace
@@ -32,7 +32,7 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
         const tag::TagObservation &tag = tags[i];
         cv::Point2f corners[4];
         for(int k = 0; k < 4; ++k)
-            corners[k] = tag.corners_raw[k] * invScale;
+            corners[k] = tag.corners_raw_[k] * invScale;
 
         for(int k = 0; k < 4; ++k)
         {
@@ -48,16 +48,16 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
         center *= 0.25f;
 
         // v: 位姿有效；a: 歧义已消解
-        const bool has_pose = tag.pose_estimate.has_value();
+        const bool has_pose = tag.pose_estimate_.has_value();
         const tag::TagPoseCandidate *selected =
-            has_pose ? tag.pose_estimate->Selected() : nullptr;
+            has_pose ? tag.pose_estimate_->GetSelectedCandidate() : nullptr;
         const int valid = selected ? 1 : 0;
         const int amb_resolved =
-            (has_pose && tag.pose_estimate->selected_candidate >= 0) ? 1 : 0;
+            (has_pose && tag.pose_estimate_->selected_candidate_ >= 0) ? 1 : 0;
 
         char line1[32];
         char line2[32];
-        std::snprintf(line1, sizeof(line1), "id:%d", tag.tag_id);
+        std::snprintf(line1, sizeof(line1), "id:%d", tag.tag_id_);
         std::snprintf(line2, sizeof(line2), "v:%d a:%d", valid, amb_resolved);
 
         // 有效：蓝；无效：红（BGR）
@@ -116,9 +116,9 @@ cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
         return vis;
 
     if(camera_id == tag::CameraId::RIGHT)
-        DrawObservations(vis, frame_data.right);
+        DrawObservations(vis, frame_data.right_);
     else
-        DrawObservations(vis, frame_data.left);
+        DrawObservations(vis, frame_data.left_);
     return vis;
 }
 
@@ -128,9 +128,9 @@ void OverlayTags(cv::Mat &image, const tag::TagFrameData &frame_data,
     if(image.empty())
         return;
     if(camera_id == tag::CameraId::RIGHT)
-        DrawObservations(image, frame_data.right, imageScale);
+        DrawObservations(image, frame_data.right_, imageScale);
     else
-        DrawObservations(image, frame_data.left, imageScale);
+        DrawObservations(image, frame_data.left_, imageScale);
 }
 
 cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
@@ -193,5 +193,5 @@ bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
     return cv::imwrite(savePath, vis);
 }
 
-}  // namespace ua_tag
+}  // namespace tag
 }  // namespace ORB_SLAM3

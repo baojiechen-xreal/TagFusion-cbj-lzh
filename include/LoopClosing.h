@@ -239,20 +239,20 @@ protected:
 
     g2o::Sim3 mSold_new;
 
-    tag::TagLoopParams mTagLoopParams;
-    tag::TagLocalBAParams mTagLocalBAParams;
+    tag::TagLoopParams tag_loop_params_;
+    tag::TagLocalBAParams tag_local_ba_params_;
 
-    bool mbTagLoopDetected = false;
+    bool tag_loop_detected_ = false;
     int mnLoopTagId = -1;
     tag::MapTagData *mpLoopTag = nullptr;
-    KeyFrame *mpTagLoopMatchedKF = nullptr;
-    Sophus::SE3f mTagLoopTwtHistory;
-    Sophus::SE3f mTagLoopTct;
+    KeyFrame *tag_loop_matched_key_frame_ = nullptr;
+    Sophus::SE3f tag_loop_twt_history_;
+    Sophus::SE3f tag_loop_tct_;
     g2o::Sim3 mg2oTagLoopScw;
 
-    int mnTagLoopCoincidences = 0;
-    int mnTagLoopNotFound = 0;
-    KeyFrame *mpTagLoopLastCurrentKF = nullptr;
+    int tag_loop_coincidences_ = 0;
+    int tag_loop_not_found_ = 0;
+    KeyFrame *tag_loop_last_current_key_frame_ = nullptr;
     g2o::Sim3 mg2oTagLoopLastScw;
 
     struct TagLoopReference
@@ -261,7 +261,7 @@ protected:
         KeyFrame *pHistoricalKF = nullptr;
         unsigned long lastSeenKF = 0;
     };
-    std::unordered_map<int, TagLoopReference> mTagLoopReferences;
+    std::unordered_map<int, TagLoopReference> tag_loop_references_;
     //-------
 
     long unsigned int mLastLoopKFid;

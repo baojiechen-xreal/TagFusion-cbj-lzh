@@ -32,36 +32,36 @@ enum class MapTagState : std::uint8_t
  * 所有权（勿违反销毁顺序：先断 KF↔MapTag，再释放 Map 中的 shared_ptr）：
  *   Map                -> shared_ptr<MapTagData>   唯一持久化所有者
  *   KeyFrame           -> MapTagData*              非拥有
- *   MapTagData::mpMap  -> Map*                     非拥有
+ *   MapTagData::map_  -> Map*                     非拥有
  *   MapTagData 观测    -> KeyFrame*                非拥有
  *
- * 唯一角点测量源：KeyFrame::mTagFrameData（本类只存左右观测索引）。
+ * 唯一角点测量源：KeyFrame::tag_frame_data_（本类只存左右观测索引）。
  */
 class MapTagData
 {
 public:
     struct KeyFrameObservation
     {
-        int leftIndex = -1;
-        int rightIndex = -1;
+        int left_index_ = -1;
+        int right_index_ = -1;
     };
 
     using KeyFrameObservations = std::map<KeyFrame *, KeyFrameObservation>;
 
     MapTagData() = default;
 
-    int Id() const;
+    int GetId() const;
     void SetId(int id);
 
     float GetTagSize() const;
     void SetTagSize(float tag_size);
 
-    void SetPose(const Sophus::SE3f &T_wt);
+    void SetPose(const Sophus::SE3f &t_wt);
     Sophus::SE3f GetPose() const;
     bool HasPose() const;
 
     // 首次赋位姿时冻结的未选中 IPPE 镜像解（世界系 T_wt）；LBA 不更新
-    void SetMirrorPose(const Sophus::SE3f &T_wt);
+    void SetMirrorPose(const Sophus::SE3f &t_wt);
     Sophus::SE3f GetMirrorPose() const;
     bool HasMirrorPose() const;
 
@@ -78,25 +78,25 @@ public:
 
     Map *GetMap() const;
 
-    bool IsInKeyFrame(KeyFrame *pKF) const;
+    bool IsInKeyFrame(KeyFrame *key_frame) const;
     KeyFrameObservations GetObservations() const;
-    std::size_t Observations() const;
-    bool Empty() const { return Observations() == 0; }
+    std::size_t GetObservationCount() const;
+    bool IsEmpty() const { return GetObservationCount() == 0; }
 
     // 导出 / 在线覆盖时写入：供 Pangolin 在 Tag 上显示 mean w_bar
     struct FactorVizWeight
     {
-        bool valid = false;
-        int n_obs = 0;
-        float mean_area = 0.0f;
-        float mean_w_s = 1.0f;
-        float mean_w_theta = 1.0f;
-        float mean_w_amb = 1.0f;
-        float mean_w_obs = 1.0f;
-        float mean_w_bar = 1.0f;
-        float min_w_bar = 1.0f;
-        float max_w_bar = 0.0f;
-        float mean_alpha_w = 1.0f;
+        bool valid_ = false;
+        int n_obs_ = 0;
+        float mean_area_ = 0.0f;
+        float mean_w_s_ = 1.0f;
+        float mean_w_theta_ = 1.0f;
+        float mean_w_amb_ = 1.0f;
+        float mean_w_obs_ = 1.0f;
+        float mean_w_bar_ = 1.0f;
+        float min_w_bar_ = 1.0f;
+        float max_w_bar_ = 0.0f;
+        float mean_alpha_w_ = 1.0f;
     };
     void SetFactorVizWeight(const FactorVizWeight &w);
     FactorVizWeight GetFactorVizWeight() const;
@@ -107,39 +107,39 @@ public:
                                       bool allow_unresolved_fallback = true) const;
 
     // Loop closing / GBA 暂存（对齐 MapPoint，不加锁）
-    unsigned long mnCorrectedByKF = 0;
-    unsigned long mnCorrectedReference = 0;
-    Sophus::SE3f mTwtGBA;
-    unsigned long mnBAGlobalForKF = 0;
+    unsigned long corrected_by_key_frame_ = 0;
+    unsigned long corrected_reference_ = 0;
+    Sophus::SE3f twt_gba_;
+    unsigned long bundle_adjustment_global_for_key_frame_ = 0;
 
 private:
     friend class ORB_SLAM3::KeyFrame;
     friend class ORB_SLAM3::Map;
 
-    void AddObservationInternal(KeyFrame *pKF, int leftIndex, int rightIndex);
-    void EraseObservationInternal(KeyFrame *pKF);
-    void SetMapInternal(Map *pMap);
+    void AddObservationInternal(KeyFrame *key_frame, int left_index, int right_index);
+    void EraseObservationInternal(KeyFrame *key_frame);
+    void SetMapInternal(Map *map);
 
-    // mMutexPose: mTwt / mbHasPose / mTwtMirror / mbHasMirrorPose / mTagSize
-    mutable std::mutex mMutexPose;
-    // mMutexFeatures: mObservations / mState / mFactorVizWeight；mpMap 由 Map 在持有 Map 锁时写入
-    mutable std::mutex mMutexFeatures;
+    // mutex_pose_: twt_ / has_pose_ / twt_mirror_ / has_mirror_pose_ / tag_size_
+    mutable std::mutex mutex_pose_;
+    // mutex_features_: observations_ / state_ / factor_viz_weight_；map_ 由 Map 在持有 Map 锁时写入
+    mutable std::mutex mutex_features_;
 
-    int mnId = -1;
-    float mTagSize = 0.0f;
+    int id_ = -1;
+    float tag_size_ = 0.0f;
 
-    Sophus::SE3f mTwt;
-    bool mbHasPose = false;
+    Sophus::SE3f twt_;
+    bool has_pose_ = false;
 
-    Sophus::SE3f mTwtMirror;
-    bool mbHasMirrorPose = false;
+    Sophus::SE3f twt_mirror_;
+    bool has_mirror_pose_ = false;
 
-    MapTagState mState = MapTagState::CANDIDATE;
-    KeyFrameObservations mObservations;
+    MapTagState state_ = MapTagState::CANDIDATE;
+    KeyFrameObservations observations_;
 
-    FactorVizWeight mFactorVizWeight;
+    FactorVizWeight factor_viz_weight_;
 
-    Map *mpMap = nullptr;
+    Map *map_ = nullptr;
 };
 
 }  // namespace tag

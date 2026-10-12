@@ -22,11 +22,9 @@ set(SRCS_DBOW2
   DBoW2/ScoringObject.cpp)
 
 set(HDRS_DUTILS
-  DUtils/Random.h
-  DUtils/Timestamp.h)
+  DUtils/Random.h)
 set(SRCS_DUTILS
-  DUtils/Random.cpp
-  DUtils/Timestamp.cpp)
+  DUtils/Random.cpp)
 
 
 find_package(OpenCV 4 QUIET)

@@ -24,7 +24,7 @@ namespace tag {
 class TagViewer
 {
 public:
-    explicit TagViewer(const std::string &settingsFile = std::string());
+    explicit TagViewer(const std::string &settings_file = std::string());
     ~TagViewer();
 
     TagViewer(const TagViewer &) = delete;
@@ -32,7 +32,7 @@ public:
 
     void Start();
     void RequestFinish();
-    bool isFinished() const;
+    bool IsFinished() const;
 
     // 冻结后忽略后续 Update（用于只展示初始化两帧 pose + MapTag）
     void Freeze();
@@ -70,24 +70,24 @@ private:
     void DrawAxes(const Sophus::SE3f &Tw, float len) const;
 
     mutable std::mutex mutex_data_;
-    cv::Mat mImage;
-    bool mbHasPose = false;
-    Sophus::SE3f mTcw;
-    unsigned long mnFrameId = 0;
-    int mTrackingState = 1;  // Tracking::NOT_INITIALIZED
-    std::vector<TagVis> mTags;
-    std::vector<Sophus::SE3f> mKfTwc;
+    cv::Mat image_;
+    bool has_pose_ = false;
+    Sophus::SE3f tcw_;
+    unsigned long frame_id_ = 0;
+    int tracking_state_ = 1;  // Tracking::NOT_INITIALIZED
+    std::vector<TagVis> tags_;
+    std::vector<Sophus::SE3f> key_frame_twc_;
 
-    std::atomic<bool> mbFinishRequested{false};
-    std::atomic<bool> mbFinished{true};
-    std::atomic<bool> mbFrozen{false};
-    std::thread mThread;
+    std::atomic<bool> finish_requested_{false};
+    std::atomic<bool> finished_{true};
+    std::atomic<bool> frozen_{false};
+    std::thread thread_;
 
-    float mCameraSize = 0.08f;
-    float mViewpointX = 0.0f;
-    float mViewpointY = -0.7f;
-    float mViewpointZ = -1.8f;
-    float mViewpointF = 500.0f;
+    float camera_size_ = 0.08f;
+    float viewpoint_x_ = 0.0f;
+    float viewpoint_y_ = -0.7f;
+    float viewpoint_z_ = -1.8f;
+    float viewpoint_f_ = 500.0f;
 };
 
 }  // namespace tag

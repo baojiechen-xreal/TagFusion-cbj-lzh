@@ -57,7 +57,7 @@ KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
     mnMaxY(F.mnMaxY), mK_(F.mK_), mPrevKF(NULL), mNextKF(NULL), mpImuPreintegrated(F.mpImuPreintegrated),
     mImuCalib(F.mImuCalib), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
     mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mDistCoef(F.mDistCoef), mbNotErase(false), mnDataset(F.mnDataset),
-    mTagFrameData(F.mTagFrameData),
+    tag_frame_data_(F.tag_frame_data_),
     mbToBeErased(false), mbBad(false), mbFixedPose(false), mHalfBaseline(F.mb/2), mpMap(pMap), mbCurrentPlaceRecognition(false), mNameFile(F.mNameFile), mnMergeCorrectedForKF(0),
     mpCamera(F.mpCamera), mpCamera2(F.mpCamera2),
     mvLeftToRightMatch(F.mvLeftToRightMatch),mvRightToLeftMatch(F.mvRightToLeftMatch), mTlr(F.GetRelativePoseTlr()),
@@ -311,21 +311,21 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
     if(!pMapKF || pTag->GetMap() != pMapKF)
         return false;
 
-    const int tag_id = pTag->Id();
+    const int tag_id = pTag->GetId();
     if(tag_id < 0)
         return false;
 
     if(leftIndex < 0 && rightIndex < 0)
         return false;
 
-    if(leftIndex >= static_cast<int>(mTagFrameData.left.size()))
+    if(leftIndex >= static_cast<int>(tag_frame_data_.left_.size()))
         return false;
-    if(rightIndex >= static_cast<int>(mTagFrameData.right.size()))
+    if(rightIndex >= static_cast<int>(tag_frame_data_.right_.size()))
         return false;
 
-    if(leftIndex >= 0 && mTagFrameData.left[leftIndex].tag_id != tag_id)
+    if(leftIndex >= 0 && tag_frame_data_.left_[leftIndex].tag_id_ != tag_id)
         return false;
-    if(rightIndex >= 0 && mTagFrameData.right[rightIndex].tag_id != tag_id)
+    if(rightIndex >= 0 && tag_frame_data_.right_[rightIndex].tag_id_ != tag_id)
         return false;
 
     int final_left = leftIndex;
@@ -360,7 +360,7 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
             assoc.pMapTag = pTag;
             assoc.leftObservationIndex = final_left;
             assoc.rightObservationIndex = final_right;
-            assoc.historicalObservationCount = pTag->Observations();
+            assoc.historicalObservationCount = pTag->GetObservationCount();
             if(pTag->HasPose() && assoc.historicalObservationCount > 0)
             {
                 // 保存当前 KF 关联前的最新 Tag pose（不是初始化 pose）。这是值拷贝：

@@ -15,26 +15,26 @@ class TagFrameData
 public:
     using Observations = std::vector<TagObservation>;
 
-    Observations left;
-    Observations right;
+    Observations left_;
+    Observations right_;
 
     void Add(TagObservation observation);
 
     const TagObservation *Find(int tag_id, CameraId camera_id) const noexcept;
     TagObservation *Find(int tag_id, CameraId camera_id) noexcept;
 
-    // 回写消歧结果：仅更新 selected_candidate 与所选候选 T_ct（T_ct 可选）
+    // 回写消歧结果：仅更新 selected_candidate_ 与所选候选 t_ct_（t_ct 可选）
     bool WriteBackSelectedCandidate(int tag_id, CameraId camera_id,
                                     int selected_candidate,
-                                    const Sophus::SE3f *T_ct = nullptr);
+                                    const Sophus::SE3f *t_ct = nullptr);
 
     void Clear();
 
     // 重置本帧所有 Tag 观测的优化外点（同帧多次 PoseOptimization 前调用）
-    void ResetOptOutliers();
+    void ResetOptimizationOutliers();
 
-    bool Empty() const noexcept;
-    std::size_t Size() const noexcept;
+    bool IsEmpty() const noexcept;
+    std::size_t GetSize() const noexcept;
 };
 
 }  // namespace tag

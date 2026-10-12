@@ -153,8 +153,8 @@ struct TagLocalBAStats
 };
 
 // 在进入 PoseOptimization / PoseInertial* 前查询 MapTag，生成与当前帧观测对齐的约束快照。
-// 只使用检测有效观测（IsDetectValid）；忽略 is_opt_outlier。
-// 联合优化入口会 ResetOptOutliers，同帧可再次加入 Tag。
+// 只使用检测有效观测（IsDetectValid）；忽略 is_optimization_outlier_。
+// 联合优化入口会 ResetOptimizationOutliers，同帧可再次加入 Tag。
 // inertial=false：看 params.enable；筛选受 params.fixed_only 控制。
 // inertial=true：看 params.inertial_enable；仅 ACTIVE（不读 fixed_only）。
 std::vector<TagPoseConstraint> BuildTagMapSnapshot(

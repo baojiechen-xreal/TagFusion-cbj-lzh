@@ -27,7 +27,7 @@ public:
     TagTracker();
 
     // 从 settings yaml 读取 Tag.verbose、Tag.export_dir 等
-    explicit TagTracker(const std::string &settingsFile);
+    explicit TagTracker(const std::string &settings_file);
     ~TagTracker();
 
     TagTracker(const TagTracker &) = delete;
@@ -66,42 +66,42 @@ public:
     void SaveTagMapOnline(Map &map);
 
     // 若开启导出：定标后立刻写出 MapTag + ORB 初始化点云/关键帧（尺度对比用）
-    bool SaveInitMaps(Map &map,
+    bool SaveInitializationMaps(Map &map,
                       const std::vector<Eigen::Vector3f> &orb_points,
                       const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw);
 
-    long unsigned int GetReferenceKeyFrameId() const noexcept { return mnReferenceKFId; }
-    bool HasReferenceKeyFrame() const noexcept { return mbHasReferenceKF; }
+    long unsigned int GetReferenceKeyFrameId() const noexcept { return reference_key_frame_id_; }
+    bool HasReferenceKeyFrame() const noexcept { return has_reference_key_frame_; }
 
     // 是否启用条件 3：可选参考 KF baseline 判定（休眠路径）
-    void SetCheckRefKFBaseline(bool enable) noexcept { mbCheckRefKFBaseline = enable; }
-    bool GetCheckRefKFBaseline() const noexcept { return mbCheckRefKFBaseline; }
+    void SetCheckReferenceKeyFrameBaseline(bool enable) noexcept { check_reference_key_frame_baseline_ = enable; }
+    bool GetCheckReferenceKeyFrameBaseline() const noexcept { return check_reference_key_frame_baseline_; }
 
-    void SetMaxVisibleFramesPerMarker(int n) noexcept { mnMaxVisibleFramesPerMarker = n; }
-    void SetMinBaseLine(float meters) noexcept { mMinBaseLine = meters; }
+    void SetMaxVisibleFramesPerMarker(int n) noexcept { max_visible_frames_per_marker_ = n; }
+    void SetMinBaseline(float meters) noexcept { min_baseline_m_ = meters; }
 
 private:
     std::optional<Sophus::SE3f> PredictPoseWithMotionModel() const;
     void SelectReferenceKeyFrame(const Frame &frame, Map &map);
-    bool NeedNewKeyFrame(const Frame &frame, const Map &map) const;
-    void UpdateMotionCache(const Sophus::SE3f &Tcw_current);
+    bool ShouldCreateKeyFrame(const Frame &frame, const Map &map) const;
+    void SetMotionCache(const Sophus::SE3f &tcw_current);
 
-    Sophus::SE3f mLastTcw;
-    bool mbHasLastTcw{false};
+    Sophus::SE3f last_tcw_;
+    bool has_last_tcw_{false};
 
-    Sophus::SE3f mVelocity;
-    bool mbHasVelocity{false};
+    Sophus::SE3f velocity_;
+    bool has_velocity_{false};
 
-    long unsigned int mnReferenceKFId{0};
-    bool mbHasReferenceKF{false};
+    long unsigned int reference_key_frame_id_{0};
+    bool has_reference_key_frame_{false};
 
-    int mnMaxVisibleFramesPerMarker{10};
-    float mMinBaseLine{0.07f};
-    bool mbCheckRefKFBaseline{false};
+    int max_visible_frames_per_marker_{10};
+    float min_baseline_m_{0.07f};
+    bool check_reference_key_frame_baseline_{false};
 
-    bool mbVerbose{false};
+    bool verbose_{false};
 
-    std::unique_ptr<TagMapExporter> mpExporter;
+    std::unique_ptr<TagMapExporter> exporter_;
 };
 
 }  // namespace tag

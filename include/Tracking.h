@@ -58,10 +58,10 @@ class LoopClosing;
 class System;
 class Settings;
 
-namespace ua_tag
+namespace tag
 {
 class AprilTagDetector;
-}  // namespace ua_tag
+}  // namespace tag
 
 namespace tag
 {
@@ -171,13 +171,13 @@ public:
     cv::Mat mImGray;
 
     // Tag 总开关（Tag.enable=0：不检测 / 不建图 / 不优化 / 不因 Tag 插 KF）
-    bool mbTagEnabled = true;
+    bool tag_enabled_ = true;
     // 上一帧前端 Tag 耗时（DetectAndStoreTags / IPPE+双目消歧；不含 imshow / save_vis）
     double mLastTagDetectMs = 0.0;
     double mLastTagIppeMs = 0.0;
-    bool mbTagSaveVis = false;
-    std::string mTagSaveVisDir = "tag_vis";
-    bool mbTagShowInOrbViewer = false;  // yaml: Tag.show_in_orb_viewer；离线主线程 imshow
+    bool tag_save_vis_ = false;
+    std::string tag_save_vis_dir_ = "tag_vis";
+    bool tag_show_in_orb_viewer_ = false;  // yaml: Tag.show_in_orb_viewer；离线主线程 imshow
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -323,12 +323,12 @@ protected:
     ORBextractor* mpIniORBextractor;
 
     // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
-    ua_tag::AprilTagDetector* mpAprilTagDetector;
+    tag::AprilTagDetector* april_tag_detector_;
 
     // Tag 模块（双目 Tag 地图由 TryInitializeTagMapAfterOrbTracking 在 ORB 跟踪稳定后建立）
-    tag::TagInitializer* mpTagInitializer;
-    tag::TagTracker* mpTagTracker;
-    tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
+    tag::TagInitializer* tag_initializer_;
+    tag::TagTracker* tag_tracker_;
+    tag::TagViewer* tag_viewer_;  // 可选；Tag.viewer=1 时创建
 
     //BoW
     ORBVocabulary* mpORBVocabulary;
@@ -433,7 +433,7 @@ protected:
     std::string mSaveOnlinePoseFile = "OnlineCameraTrajectory.txt";
 
     // Tag 联合 PoseOptimization / PoseInertial*（Tag.pose_optimization 共用开关）
-    tag::TagPoseOptParams mTagPoseOptParams;
+    tag::TagPoseOptParams tag_pose_opt_params_;
 
     std::ofstream mOnlinePoseFile;
 

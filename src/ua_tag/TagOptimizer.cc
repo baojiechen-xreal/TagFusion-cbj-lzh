@@ -91,7 +91,7 @@ boost::shared_ptr<gtsam::Cal3Fisheye> MakeFisheyeCalib(GeometricCamera *camera)
 struct CornerMeas
 {
     gtsam::Point3 pw;
-    gtsam::Point2 z;  // 鱼眼：corners_raw；针孔：corners_undistorted
+    gtsam::Point2 z;  // 鱼眼：corners_raw_；针孔：corners_undistorted_
     bool use_fisheye = false;
     boost::shared_ptr<gtsam::Cal3_S2> K_pin;
     boost::shared_ptr<gtsam::Cal3Fisheye> K_fish;
@@ -124,7 +124,7 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         std::cerr << "[TagOptimizer] ERROR: left camera model missing" << std::endl;
         return;
     }
-    if(!frame.mTagFrameData.right.empty() && !frame.mpCamera2)
+    if(!frame.tag_frame_data_.right_.empty() && !frame.mpCamera2)
     {
         std::cerr << "[TagOptimizer] ERROR: right Tag measurements require Camera2 "
                      "(no left-camera fallback)"
@@ -153,7 +153,7 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         if(!use_fisheye && !K_pin)
             return;
 
-        const MapTagData *map_tag = FindFixedTagWithCorners(fixed_tags, obs.tag_id);
+        const MapTagData *map_tag = FindFixedTagWithCorners(fixed_tags, obs.tag_id_);
         if(!map_tag)
             return;
 
@@ -162,7 +162,7 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         const auto &pw = map_tag->GetWorldCorners();
         // 鱼眼：原图像素 + Cal3Fisheye（与 ORB KB / BA 一致）
         // 针孔：去畸变像素 + Cal3_S2
-        const auto &uv = use_fisheye ? obs.corners_raw : obs.corners_undistorted;
+        const auto &uv = use_fisheye ? obs.corners_raw_ : obs.corners_undistorted_;
 
         for(int i = 0; i < 4; ++i)
         {
@@ -178,9 +178,9 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         }
     };
 
-    for(TagObservation &obs : frame.mTagFrameData.left)
+    for(TagObservation &obs : frame.tag_frame_data_.left_)
         append_obs(obs, fish_left, K_left_pin, K_left_fish, boost::none);
-    for(TagObservation &obs : frame.mTagFrameData.right)
+    for(TagObservation &obs : frame.tag_frame_data_.right_)
         append_obs(obs, fish_right, K_right_pin, K_right_fish, T_body_right);
 }
 
@@ -263,37 +263,37 @@ std::optional<Sophus::SE3f> EstimateInitialTcwFromFixedTags(
     const Frame &frame, const TagOptimizer::TagContainer &fixed_tags)
 {
     auto try_obs = [&](const TagObservation &obs) -> std::optional<Sophus::SE3f> {
-        if(!obs.IsDetectValid() || !obs.pose_estimate.has_value())
+        if(!obs.IsDetectValid() || !obs.pose_estimate_.has_value())
             return std::nullopt;
 
-        const auto it = fixed_tags.find(obs.tag_id);
+        const auto it = fixed_tags.find(obs.tag_id_);
         if(it == fixed_tags.end() || !it->second || !it->second->HasPose())
             return std::nullopt;
 
-        const TagPoseEstimate &est = *obs.pose_estimate;
-        const TagPoseCandidate *cand = est.Selected();
-        if(!cand || !cand->valid)
+        const TagPoseEstimate &est = *obs.pose_estimate_;
+        const TagPoseCandidate *cand = est.GetSelectedCandidate();
+        if(!cand || !cand->valid_)
         {
-            if(est.candidates[0].valid)
-                cand = &est.candidates[0];
-            else if(est.candidates[1].valid)
-                cand = &est.candidates[1];
+            if(est.candidates_[0].valid_)
+                cand = &est.candidates_[0];
+            else if(est.candidates_[1].valid_)
+                cand = &est.candidates_[1];
             else
                 return std::nullopt;
         }
 
         // Tcw 为左目位姿：T_cL_t * T_wt^{-1}；右目 IPPE 先经 T_lr 转到左目
-        const Sophus::SE3f T_cL_t = ExpressTagPoseInLeftCamera(
-            obs.camera_id, cand->T_ct, frame.GetRelativePoseTlr());
+        const Sophus::SE3f T_cL_t = ConvertTagPoseToLeftCamera(
+            obs.camera_id_, cand->t_ct_, frame.GetRelativePoseTlr());
         return T_cL_t * it->second->GetPose().inverse();
     };
 
-    for(const TagObservation &obs : frame.mTagFrameData.left)
+    for(const TagObservation &obs : frame.tag_frame_data_.left_)
     {
         if(auto Tcw = try_obs(obs))
             return Tcw;
     }
-    for(const TagObservation &obs : frame.mTagFrameData.right)
+    for(const TagObservation &obs : frame.tag_frame_data_.right_)
     {
         if(auto Tcw = try_obs(obs))
             return Tcw;
@@ -303,7 +303,7 @@ std::optional<Sophus::SE3f> EstimateInitialTcwFromFixedTags(
 
 }  // namespace
 
-bool TagOptimizer::PoseOptimization(Frame &frame,
+bool TagOptimizer::OptimizePose(Frame &frame,
                                     const TagContainer &fixed_tags,
                                     const std::optional<Sophus::SE3f> &Tcw_pred,
                                     bool verbose)
@@ -330,7 +330,7 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
     }
 
     // 同帧多次优化前清临时外点；检测外点保持不变
-    frame.mTagFrameData.ResetOptOutliers();
+    frame.tag_frame_data_.ResetOptimizationOutliers();
 
     std::vector<CornerMeas> meas;
     CollectFixedTagCornerMeasurements(frame, fixed_tags, meas);
@@ -347,7 +347,7 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
     for(const CornerMeas &m : meas)
     {
         if(m.obs)
-            covis_tag_ids.insert(m.obs->tag_id);
+            covis_tag_ids.insert(m.obs->tag_id_);
     }
     const int n_covis_tags = static_cast<int>(covis_tag_ids.size());
     if(n_covis_tags <= 0)
@@ -410,10 +410,10 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
             inlier[i] = 0;
     }
 
-    for(TagObservation &obs : frame.mTagFrameData.left)
-        obs.ResetOptOutliers();
-    for(TagObservation &obs : frame.mTagFrameData.right)
-        obs.ResetOptOutliers();
+    for(TagObservation &obs : frame.tag_frame_data_.left_)
+        obs.ResetOptimizationOutliers();
+    for(TagObservation &obs : frame.tag_frame_data_.right_)
+        obs.ResetOptimizationOutliers();
 
     for(std::size_t i = 0; i < meas.size();)
     {
@@ -427,7 +427,7 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
             ++j;
         }
         if(obs && n_bad >= 3)
-            obs->is_opt_outlier = true;
+            obs->is_optimization_outlier_ = true;
         i = j;
     }
 
@@ -453,7 +453,7 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
 #endif
 }
 
-bool TagOptimizer::PoseOptimizationForSecondFrame(
+bool TagOptimizer::OptimizePoseForSecondFrame(
     Frame &second_frame,
     const TagContainer &fixed_tags,
     Sophus::SE3f &Tcw_out,
@@ -464,7 +464,7 @@ bool TagOptimizer::PoseOptimizationForSecondFrame(
     if(!pred && !second_frame.HasPose())
         pred = EstimateInitialTcwFromFixedTags(second_frame, fixed_tags);
 
-    if(!PoseOptimization(second_frame, fixed_tags, pred, verbose))
+    if(!OptimizePose(second_frame, fixed_tags, pred, verbose))
         return false;
 
     if(!second_frame.HasPose())

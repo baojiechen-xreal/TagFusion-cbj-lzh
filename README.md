@@ -1,18 +1,20 @@
-# ORB-SLAM3
+# TagFusion
 
-### V1.0, December 22th, 2021
-**Authors:** Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, [José M. M. Montiel](http://webdiis.unizar.es/~josemari/), [Juan D. Tardos](http://webdiis.unizar.es/~jdtardos/).
+### Based on ORB-SLAM3 V1.0
+**ORB-SLAM3 authors:** Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, [José M. M. Montiel](http://webdiis.unizar.es/~josemari/), [Juan D. Tardos](http://webdiis.unizar.es/~jdtardos/).
 
-The [Changelog](https://github.com/UZ-SLAMLab/ORB_SLAM3/blob/master/Changelog.md) describes the features of each version.
+TagFusion is a **Visual-Inertial SLAM system that fuses AprilTag fiducial markers with ORB features and IMU measurements**. It is built on top of [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) and targets offline processing of **stereo-inertial** sequences recorded with XREAL glasses, using **pin-hole and fisheye (Kannala-Brandt)** lens models.
 
-ORB-SLAM3 is the first real-time SLAM library able to perform **Visual, Visual-Inertial and Multi-Map SLAM** with **monocular, stereo and RGB-D** cameras, using **pin-hole and fisheye** lens models. In all sensor configurations, ORB-SLAM3 is as robust as the best systems available in the literature, and significantly more accurate. 
+Compared to ORB-SLAM3, TagFusion adds:
 
-We provide examples to run ORB-SLAM3 in the [EuRoC dataset](http://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) using stereo or monocular, with or without IMU, and in the [TUM-VI dataset](https://vision.in.tum.de/data/datasets/visual-inertial-dataset) using fisheye stereo or monocular, with or without IMU. Videos of some example executions can be found at [ORB-SLAM3 channel](https://www.youtube.com/channel/UCXVt-kXG6T95Z4tVaYlU80Q).
+* **AprilTag frontend.** Tag corners are detected in every frame with the ethz AprilTag library (*Thirdparty/apriltag*, default family `tag36h11`). The tag pose is solved with IPPE_SQUARE, and the two-fold IPPE ambiguity is resolved by single-frame error ratio, stereo cross-reprojection or multi-keyframe observations.
+* **Tag map.** Tags are first-class map elements (`MapTagData`) with a CANDIDATE → ACTIVE lifecycle. The tag map is initialized in stereo and stereo-inertial modes only, once ORB tracking is OK, the first visual-inertial BA (VIBA 1) has finished (stereo-inertial), and at least 3 disambiguated tags are visible in the same frame.
+* **Tag constraints in optimization.** Tag corner reprojection edges are added to pose optimization, visual Local BA, inertial Local BA and full inertial BA.
+* **Tag loop closing.** Re-observed tags are checked for loops before the BoW place recognition, and the original `CorrectLoop` is reused for correction.
+* **Synchronous offline backend.** LocalMapping and LoopClosing no longer run in their own threads; they are executed after each tracked frame (`System::RunOfflineBackend`), which makes runs reproducible.
+* **No Pangolin viewer.** Visualization is done with OpenCV `imshow`, controlled by `Tag.show_in_orb_viewer`.
 
-This software is based on [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) developed by [Raul Mur-Artal](http://webdiis.unizar.es/~raulmur/), [Juan D. Tardos](http://webdiis.unizar.es/~jdtardos/), [J. M. M. Montiel](http://webdiis.unizar.es/~josemari/) and [Dorian Galvez-Lopez](http://doriangalvez.com/) ([DBoW2](https://github.com/dorian3d/DBoW2)).
-
-<a href="https://youtu.be/HyLNq-98LRo" target="_blank"><img src="https://img.youtube.com/vi/HyLNq-98LRo/0.jpg" 
-alt="ORB-SLAM3" width="240" height="180" border="10" /></a>
+The original ORB-SLAM3 examples (EuRoC, TUM-VI, KITTI, RealSense and ROS) have been removed.
 
 ### Related Publications:
 
@@ -20,24 +22,18 @@ alt="ORB-SLAM3" width="240" height="180" border="10" /></a>
 
 [IMU-Initialization] Carlos Campos, J. M. M. Montiel and Juan D. Tardós, **Inertial-Only Optimization for Visual-Inertial Initialization**, *ICRA 2020*. **[PDF](https://arxiv.org/pdf/2003.05766.pdf)**
 
-[ORBSLAM-Atlas] Richard Elvira, J. M. M. Montiel and Juan D. Tardós, **ORBSLAM-Atlas: a robust and accurate multi-map system**, *IROS 2019*. **[PDF](https://arxiv.org/pdf/1908.11585.pdf)**.
+[AprilTag] Edwin Olson, **AprilTag: A robust and flexible visual fiducial system**, *ICRA 2011*.
 
-[ORBSLAM-VI] Raúl Mur-Artal, and Juan D. Tardós, **Visual-inertial monocular SLAM with map reuse**, IEEE Robotics and Automation Letters, vol. 2 no. 2, pp. 796-803, 2017. **[PDF](https://arxiv.org/pdf/1610.05949.pdf)**. 
-
-[Stereo and RGB-D] Raúl Mur-Artal and Juan D. Tardós. **ORB-SLAM2: an Open-Source SLAM System for Monocular, Stereo and RGB-D Cameras**. *IEEE Transactions on Robotics,* vol. 33, no. 5, pp. 1255-1262, 2017. **[PDF](https://arxiv.org/pdf/1610.06475.pdf)**.
-
-[Monocular] Raúl Mur-Artal, José M. M. Montiel and Juan D. Tardós. **ORB-SLAM: A Versatile and Accurate Monocular SLAM System**. *IEEE Transactions on Robotics,* vol. 31, no. 5, pp. 1147-1163, 2015. (**2015 IEEE Transactions on Robotics Best Paper Award**). **[PDF](https://arxiv.org/pdf/1502.00956.pdf)**.
+[IPPE] Toby Collins and Adrien Bartoli, **Infinitesimal Plane-Based Pose Estimation**, *International Journal of Computer Vision 109(3):252-286, 2014*.
 
 [DBoW2 Place Recognition] Dorian Gálvez-López and Juan D. Tardós. **Bags of Binary Words for Fast Place Recognition in Image Sequences**. *IEEE Transactions on Robotics,* vol. 28, no. 5, pp. 1188-1197, 2012. **[PDF](http://doriangalvez.com/php/dl.php?dlp=GalvezTRO12.pdf)**
 
 # 1. License
 
-ORB-SLAM3 is released under [GPLv3 license](https://github.com/UZ-SLAMLab/ORB_SLAM3/LICENSE). For a list of all code/library dependencies (and associated licenses), please see [Dependencies.md](https://github.com/UZ-SLAMLab/ORB_SLAM3/blob/master/Dependencies.md).
+TagFusion is a modified version of ORB-SLAM3 and is therefore released under the [GPLv3 license](https://github.com/UZ-SLAMLab/ORB_SLAM3/blob/master/LICENSE). For a list of all code/library dependencies (and associated licenses), please see [Dependencies.md](Dependencies.md).
 
-For a closed-source version of ORB-SLAM3 for commercial purposes, please contact the authors: orbslam (at) unizar (dot) es.
+If you use this work in an academic context, please cite ORB-SLAM3:
 
-If you use ORB-SLAM3 in an academic work, please cite:
-  
     @article{ORBSLAM3_TRO,
       title={{ORB-SLAM3}: An Accurate Open-Source Library for Visual, Visual-Inertial 
                and Multi-Map {SLAM}},
@@ -51,185 +47,160 @@ If you use ORB-SLAM3 in an academic work, please cite:
      }
 
 # 2. Prerequisites
-We have tested the library in **Ubuntu 16.04** and **18.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
+We have tested the library in **Ubuntu 22.04** with **g++ 11.4** and **CMake 3.22**. On Ubuntu 22.04 most dependencies can be installed with:
 
-## C++11 or C++0x Compiler
-We use the new thread and chrono functionalities of C++11.
+```
+sudo apt install cmake build-essential git pkg-config \
+  libopencv-dev libeigen3-dev libboost-all-dev libssl-dev \
+  libglew-dev libgl1-mesa-dev libepoxy-dev python3-dev
+```
+
+## C++17 Compiler
+The project is compiled with C++17.
 
 ## Pangolin
-We use [Pangolin](https://github.com/stevenlovegrove/Pangolin) for visualization and user interface. Dowload and install instructions can be found at: https://github.com/stevenlovegrove/Pangolin.
+The Pangolin viewer is disabled at runtime, but several sources still include Pangolin headers, so [Pangolin](https://github.com/stevenlovegrove/Pangolin) is **required at build time. Tested with v0.8** (v0.6 is also supported). CMake first looks for it in `../../Pangolin/build/src` relative to the repository root; otherwise pass `-DPangolin_DIR=...`:
+
+```
+cd ~
+git clone --recursive https://github.com/stevenlovegrove/Pangolin.git
+cd Pangolin && git checkout v0.8
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release && make -j8
+```
 
 ## OpenCV
-We use [OpenCV](http://opencv.org) to manipulate images and features. Dowload and install instructions can be found at: http://opencv.org. **Required at leat 3.0. Tested with OpenCV 3.2.0 and 4.4.0**.
+We use [OpenCV](http://opencv.org) to manipulate images and features and to solve IPPE. **Required at least 4.2. Tested with OpenCV 4.5.4**.
 
 ## Eigen3
 Required by g2o (see below). Download and install instructions can be found at: http://eigen.tuxfamily.org. **Required at least 3.1.0**.
 
-## DBoW2 and g2o (Included in Thirdparty folder)
-We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) library to perform place recognition and [g2o](https://github.com/RainerKuemmerle/g2o) library to perform non-linear optimizations. Both modified libraries (which are BSD) are included in the *Thirdparty* folder.
+## Boost and OpenSSL
+Boost serialization and OpenSSL (`libcrypto`) are used by the Atlas serialization code.
 
-## Python
-Required to calculate the alignment of the trajectory with the ground truth. **Required Numpy module**.
+## DBoW2, g2o, Sophus and AprilTag (Included in Thirdparty folder)
+We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) library to perform place recognition, [g2o](https://github.com/RainerKuemmerle/g2o) to perform non-linear optimizations and [Sophus](https://github.com/strasdat/Sophus) for Lie groups. Tags are detected with the ethz AprilTag library (`ethz_apriltag2`). All of them are included in the *Thirdparty* folder and built automatically.
 
-* (win) http://www.python.org/downloads/windows
-* (deb) `sudo apt install libpython2.7-dev`
-* (mac) preinstalled with osx
+## GTSAM (optional)
+GTSAM 4.2.2 is included in *Thirdparty* but only used by the monocular tag initializer, which is not reached in stereo or stereo-inertial runs. Its bundled `timing/` folder is incomplete, so **`build.sh` disables it** (`-DORB_SLAM3_WITH_GTSAM=OFF`).
 
-## ROS (optional)
+## Python (optional)
+Required by the evaluation and visualization scripts in *scripts*. **Required Numpy module**; [evo](https://github.com/MichaelGrupp/evo) is needed for trajectory evaluation (`pip install evo`).
 
-We provide some examples to process input of a monocular, monocular-inertial, stereo, stereo-inertial or RGB-D camera using ROS. Building these examples is optional. These have been tested with ROS Melodic under Ubuntu 18.04.
-
-# 3. Building ORB-SLAM3 library and examples
+# 3. Building TagFusion library and examples
 
 Clone the repository:
 ```
-git clone https://github.com/UZ-SLAMLab/ORB_SLAM3.git ORB_SLAM3
+git clone https://github.com/xreal-image-process/TagFusion.git TagFusion
 ```
 
-We provide a script `build.sh` to build the *Thirdparty* libraries and *ORB-SLAM3*. Please make sure you have installed all required dependencies (see section 2). Execute:
+We provide a script `build.sh` to build the *Thirdparty* libraries, uncompress the ORB vocabulary and build *TagFusion*. Please make sure you have installed all required dependencies (see section 2). Execute:
 ```
-cd ORB_SLAM3
+cd TagFusion
 chmod +x build.sh
 ./build.sh
 ```
 
-This will create **libORB_SLAM3.so**  at *lib* folder and the executables in *Examples* folder.
+This will create **libORB_SLAM3.so** at *lib* folder and the following executables:
 
-# 4. Running ORB-SLAM3 with your camera
+* `Examples/TagFusion/XREAL_Glass/`: `stereo_inertial_xreal_glass_tag` (**main entry**), `stereo_xreal_glass_tag`, `mono_xreal_glass_tag`.
+* `Examples/TagFusion/PennCOSYVIO/`: `stereo_penncosyvio_tag`, `mono_penncosyvio_tag`.
+* `Examples/TagFusion/test/`: `stereo_test_tag`, `stereo_inertial_test_tag`, `test_tag_corner_jac` (numerical check of the tag corner Jacobians).
+* `scripts/`: `ethz_tag_detect`, `ethz_tag_enhance_eval` (command line tag detection tools used by the Python scripts).
 
-Directory `Examples` contains several demo programs and calibration files to run ORB-SLAM3 in all sensor configurations with Intel Realsense cameras T265 and D435i. The steps needed to use your own camera are: 
-
-1. Calibrate your camera following `Calibration_Tutorial.pdf` and write your calibration file `your_camera.yaml`
-
-2. Modify one of the provided demos to suit your specific camera model, and build it
-
-3. Connect the camera to your computer using USB3 or the appropriate interface
-
-4. Run ORB-SLAM3. For example, for our D435i camera, we would execute:
-
+All SLAM executables take the same arguments: `path_to_vocabulary path_to_settings path_to_sequence [trajectory_file_name]`. To rebuild a single target after changing the code:
 ```
-./Examples/Stereo-Inertial/stereo_inertial_realsense_D435i Vocabulary/ORBvoc.txt ./Examples/Stereo-Inertial/RealSense_D435i.yaml
+cd build
+make -j6 stereo_inertial_xreal_glass_tag
 ```
 
-# 5. EuRoC Examples
-[EuRoC dataset](http://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) was recorded with two pinhole cameras and an inertial sensor. We provide an example script to launch EuRoC sequences in all the sensor configurations.
+# 4. Running TagFusion with XREAL Glass sequences
 
-1. Download a sequence (ASL format) from http://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets
+## Sequence format
+Each sequence is expected to have the following layout:
 
-2. Open the script "euroc_examples.sh" in the root of the project. Change **pathDatasetEuroc** variable to point to the directory where the dataset has been uncompressed. 
-
-3. Execute the following script to process all the sequences with all sensor configurations:
 ```
-./euroc_examples
-```
-
-## Evaluation
-EuRoC provides ground truth for each sequence in the IMU body reference. As pure visual executions report trajectories centered in the left camera, we provide in the "evaluation" folder the transformation of the ground truth to the left camera reference. Visual-inertial trajectories use the ground truth from the dataset.
-
-Execute the following script to process sequences and compute the RMS ATE:
-```
-./euroc_eval_examples
+<sequence>/raw_data/glass/
+├── cam0/images/m0000000.pgm ...
+├── cam0/images/timestamps.txt    # one line per frame: "m0000000.pgm 37.763832704" (seconds)
+├── cam1/images/m0000000.pgm ...  # same file names as cam0
+└── imu0.txt                      # one line per sample: "t temp gx gy gz ax ay az" (rad/s, m/s^2)
 ```
 
-# 6. TUM-VI Examples
-[TUM-VI dataset](https://vision.in.tum.de/data/datasets/visual-inertial-dataset) was recorded with two fisheye cameras and an inertial sensor.
-
-1. Download a sequence from https://vision.in.tum.de/data/datasets/visual-inertial-dataset and uncompress it.
-
-2. Open the script "tum_vi_examples.sh" in the root of the project. Change **pathDatasetTUM_VI** variable to point to the directory where the dataset has been uncompressed. 
-
-3. Execute the following script to process all the sequences with all sensor configurations:
+The sequence argument can point to `<sequence>`, `.../glass`, `.../glass/cam0` or `.../glass/cam0/images`; the right camera and IMU paths are derived automatically. Only the first 8 columns of `imu0.txt` are read (extra columns are ignored), and the 7-column format `t gx gy gz ax ay az` is also accepted. If the IMU file on disk is named `imu.txt`, create a link before running:
 ```
-./tum_vi_examples
+ln -sfn imu.txt <sequence>/raw_data/glass/imu0.txt
 ```
 
-## Evaluation
-In TUM-VI ground truth is only available in the room where all sequences start and end. As a result the error measures the drift at the end of the sequence. 
+## Settings files
+Settings files are in *Examples/TagFusion/XREAL_Glass*. **The settings file must match the capture date of the sequence**, since resolution, frame rate, calibration and tag size differ between batches:
 
-Execute the following script to process sequences and compute the RMS ATE:
+* **20260819**: `0819_ror_pat_led_f_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
+* **20260812**: `q3fl_5f_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.144 m with per-id overrides)
+* **20260807**: `01-1_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
+* **20260309**: `0309_01-1_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.06 m)
+
+The most relevant parameters are:
+
+* `System.maxFrames`: process only the first N frames (0 or absent = all). Recommended for debugging.
+* `Tag.enable`: 0 disables the whole tag module (plain ORB-SLAM3 behaviour).
+* `Tag.black_borders`: tag black border width(s), e.g. `[1, 2]` (one detector per value). The legacy key `Tag.black_border: 1` is still accepted. **A wrong value means no tag will be detected.**
+* `Tag.size`, `Tag.size_by_id`: default tag side length (meters) and per-id overrides. `Tag.ignore_ids` drops detections of the listed ids.
+* `Tag.pose_optimization`, `Tag.local_ba.enable`, `Tag.loop.enable`: enable tag constraints in pose optimization, Local BA and tag loop closing. `Tag.factor_weight.*` adapts the tag weight to tag area, viewing angle and ambiguity.
+* `Tag.show_in_orb_viewer`: 1 shows the current frame and tag detections with `imshow` every frame. **It requires a display; set it to 0 on headless machines or over SSH.**
+* `Tag.export`, `Tag.export_dir`: export of the tag map and detections. `Tag.verbose` (and the `verbose` flag of each sub-module) produces very detailed logs.
+
+## Running
+Execute the following, choosing the settings file according to the capture date:
 ```
-./tum_vi_eval_examples
+cd Examples/TagFusion/XREAL_Glass
+SETTINGS=./0309_01-1_stereo+imu.yaml ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309
 ```
 
-# 7. ROS Examples
+The script changes to its own folder, so all outputs are written to *Examples/TagFusion/XREAL_Glass*. The defaults can be overridden with the environment variables `VOC`, `SETTINGS`, `BIN` and `SEQ`. For a stereo-only run use `run_xreal_glass_stereo.sh`. Long sequences can be run in background:
+```
+SETTINGS=./0309_01-1_stereo+imu.yaml nohup ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309 > run_0309.log 2>&1 &
+grep -c "Tracking begin" run_0309.log    # processed frames
+pkill -f stereo_inertial_xreal_glass_tag  # stop the run
+```
 
-### Building the nodes for mono, mono-inertial, stereo, stereo-inertial and RGB-D
-Tested with ROS Melodic and ubuntu 18.04.
+**Remark:** Signals are not handled and the final trajectories are only written after the last frame. If the run is stopped with Ctrl+C or `kill`, `f_*.txt` and `kf_*.txt` are not saved; use `System.maxFrames` for shorter runs instead. Closing the `imshow` windows does not stop the program.
 
-1. Add the path including *Examples/ROS/ORB_SLAM3* to the ROS_PACKAGE_PATH environment variable. Open .bashrc file:
-  ```
-  gedit ~/.bashrc
-  ```
-and add at the end the following line. Replace PATH by the folder where you cloned ORB_SLAM3:
+## Output
+* `f_<name>.txt` and `kf_<name>.txt`: frame and keyframe trajectories in TUM format (`CameraTrajectory.txt` and `KeyFrameTrajectory.txt` if no name is given).
+* `OnlineCameraTrajectory.txt`: online trajectory, i.e. the pose of each frame right after tracking, not affected by later BA.
+* `FrameTimeStats.csv`: per-frame timings (frontend, tag detection, IPPE, LocalMapping, LoopClosing).
+* `tag_export/`: tag map corners (selected and mirror IPPE solutions), detections, first registrations, initialization keyframes and the final map as `final_map.ply`.
 
-  ```
-  export ROS_PACKAGE_PATH=${ROS_PACKAGE_PATH}:PATH/ORB_SLAM3/Examples/ROS
-  ```
-  
-2. Execute `build_ros.sh` script:
+# 5. Other Examples
 
-  ```
-  chmod +x build_ros.sh
-  ./build_ros.sh
-  ```
-  
-### Running Monocular Node
-For a monocular input from topic `/camera/image_raw` run node ORB_SLAM3/Mono. You will need to provide the vocabulary file and a settings file. See the monocular examples above.
+## PennCOSYVIO
+[PennCOSYVIO](https://daniilidis-group.github.io/penncosyvio/) was recorded with a VI-Sensor stereo camera. Edit the default sequence path in `Examples/TagFusion/PennCOSYVIO/run_stereo_af.sh` or pass it as first argument:
+```
+./Examples/TagFusion/PennCOSYVIO/run_stereo_af.sh <path>/PennCOSYVIO/visensor/af
+```
 
-  ```
-  rosrun ORB_SLAM3 Mono PATH_TO_VOCABULARY PATH_TO_SETTINGS_FILE
-  ```
+## Tank test sequences
+`Examples/TagFusion/test/run_stereo_test.sh` and `run_stereo_inertial_test.sh` run the stereo and stereo-inertial test programs. The stereo-inertial case needs an `imu0.txt`, which can be extracted from a rosbag with `extract_imu_from_bag.py`.
 
-### Running Monocular-Inertial Node
-For a monocular input from topic `/camera/image_raw` and an inertial input from topic `/imu`, run node ORB_SLAM3/Mono_Inertial. Setting the optional third argument to true will apply CLAHE equalization to images (Mainly for TUM-VI dataset).
+# 6. Evaluation and tools
 
-  ```
-  rosrun ORB_SLAM3 Mono PATH_TO_VOCABULARY PATH_TO_SETTINGS_FILE [EQUALIZATION]	
-  ```
+The *scripts* folder contains:
 
-### Running Stereo Node
-For a stereo input from topic `/camera/left/image_raw` and `/camera/right/image_raw` run node ORB_SLAM3/Stereo. You will need to provide the vocabulary file and a settings file. For Pinhole camera model, if you **provide rectification matrices** (see Examples/Stereo/EuRoC.yaml example), the node will recitify the images online, **otherwise images must be pre-rectified**. For FishEye camera model, rectification is not required since system works with original images:
+* `eval_evo_ape.sh`: APE of an estimated trajectory against the `cam0_pose.txt` ground truth, using evo.
+* `visualize_init_maps.py`: interactive 3D view of the tag map and ORB map exported to `tag_export/` (`--export-dir`, `--final`, `--html`, `--png`).
+* `evaluate_tag_map_calibr_plane.py`, `evaluate_tag_map_calibr_planes.py`: coplanarity of the tag map against the calibration board planes.
+* `tag_detect.py`, `tag_detect1.py`: offline tag detection on images through `ethz_tag_detect`.
+* `ethz_tag_enhance_eval`: tag detection rate under different image enhancements.
 
-  ```
-  rosrun ORB_SLAM3 Stereo PATH_TO_VOCABULARY PATH_TO_SETTINGS_FILE ONLINE_RECTIFICATION
-  ```
+# 7. Running time analysis
+Each run writes `FrameTimeStats.csv` with per-frame timings. A summary (and an optional Plotly report) can be obtained with:
+```
+python3 scripts/summarize_frame_times.py --csv Examples/TagFusion/XREAL_Glass/FrameTimeStats.csv [--html report.html] [--ok-only]
+```
 
-### Running Stereo-Inertial Node
-For a stereo input from topics `/camera/left/image_raw` and `/camera/right/image_raw`, and an inertial input from topic `/imu`, run node ORB_SLAM3/Stereo_Inertial. You will need to provide the vocabulary file and a settings file, including rectification matrices if required in a similar way to Stereo case:
-
-  ```
-  rosrun ORB_SLAM3 Stereo_Inertial PATH_TO_VOCABULARY PATH_TO_SETTINGS_FILE ONLINE_RECTIFICATION [EQUALIZATION]	
-  ```
-  
-### Running RGB_D Node
-For an RGB-D input from topics `/camera/rgb/image_raw` and `/camera/depth_registered/image_raw`, run node ORB_SLAM3/RGBD. You will need to provide the vocabulary file and a settings file. See the RGB-D example above.
-
-  ```
-  rosrun ORB_SLAM3 RGBD PATH_TO_VOCABULARY PATH_TO_SETTINGS_FILE
-  ```
-
-**Running ROS example:** Download a rosbag (e.g. V1_02_medium.bag) from the EuRoC dataset (http://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets). Open 3 tabs on the terminal and run the following command at each tab for a Stereo-Inertial configuration:
-  ```
-  roscore
-  ```
-  
-  ```
-  rosrun ORB_SLAM3 Stereo_Inertial Vocabulary/ORBvoc.txt Examples/Stereo-Inertial/EuRoC.yaml true
-  ```
-  
-  ```
-  rosbag play --pause V1_02_medium.bag /cam0/image_raw:=/camera/left/image_raw /cam1/image_raw:=/camera/right/image_raw /imu0:=/imu
-  ```
-  
-Once ORB-SLAM3 has loaded the vocabulary, press space in the rosbag tab.
-
-**Remark:** For rosbags from TUM-VI dataset, some play issue may appear due to chunk size. One possible solution is to rebag them with the default chunk size, for example:
-  ```
-  rosrun rosbag fastrebag.py dataset-room1_512_16.bag dataset-room1_512_16_small_chunks.bag
-  ```
-
-# 8. Running time analysis
-A flag in `include\Config.h` activates time measurements. It is necessary to uncomment the line `#define REGISTER_TIMES` to obtain the time stats of one execution which is shown at the terminal and stored in a text file(`ExecTimeMean.txt`).
-
-# 9. Calibration
-You can find a tutorial for visual-inertial calibration and a detailed description of the contents of valid configuration files at  `Calibration_Tutorial.pdf`
+# 8. Troubleshooting
+* **The tag map is never initialized.** At least 3 disambiguated tags must be visible in the same frame, in stereo or stereo-inertial mode. Check `Tag.black_borders` and `Tag.size`, then enable `Tag.verbose` and look at the `[TagStereo]` and `[TagInitializer]` messages.
+* **Many `ambiguity_unresolved` messages.** Some tags do not pass the ambiguity ratio threshold yet; they are retried as more keyframes are created. This is expected.
+* **IMU initialization fails or the map is reset repeatedly.** Check `IMU.Frequency` and the `IMU.T_b_c1` extrinsics against the data, and make sure there is enough motion at the beginning of the sequence.
+* **The program exits with `requires Camera2.*`.** Stereo settings need `Camera1.*`, `Camera2.*` and `Stereo.T_c1_c2`.

@@ -914,7 +914,7 @@ public:
     int cam_idx = 0;
 };
 
-bool TestTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
+bool CheckTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
 
 } //namespace ORB_SLAM2
 
