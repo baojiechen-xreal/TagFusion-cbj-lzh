@@ -172,7 +172,8 @@ Tag.size_by_id:                  # 按 Tag_id 覆盖边长（可视化等公共�
   - { id: 114, size: 0.06 }
   - { id: 115, size: 0.06 }
 Tag.ignore_ids: [91, 92, 93]  # 屏蔽指定 Tag_id（检测结果直接丢弃）。
-Tag.gamma: 0.5                  # <1 提亮暗部；1=关闭。已取消 CLAHE
+Tag.gamma_enable: 1             # 0=送入 AprilTag 前不做 gamma；1=按 Tag.gamma 做
+Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 提亮暗部。已取消 CLAHE
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"

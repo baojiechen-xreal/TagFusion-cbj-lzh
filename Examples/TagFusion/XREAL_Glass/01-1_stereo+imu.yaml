@@ -144,9 +144,10 @@ Viewer.showTagKFs: 1
 Tag.enable: 0
 Tag.family: "tag36h11"
 Tag.hamming: 2
-Tag.black_border: 1
+Tag.black_borders: [1]
 Tag.size: 0.144
-Tag.gamma: 0.5                  # <1 提亮暗部；1=关闭。已取消 CLAHE
+Tag.gamma_enable: 1             # 0=送入 AprilTag 前不做 gamma；1=按 Tag.gamma 做
+Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 提亮暗部。已取消 CLAHE
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"

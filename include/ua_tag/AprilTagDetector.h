@@ -67,7 +67,9 @@ struct AprilTagDetectorConfig
     // yaml: Tag.ignore_ids: [1, 2, 99]
     std::set<int> ignore_ids;
 
-    // 送入 AprilTag 前的 gamma：out = 255*(in/255)^gamma；<1 提亮暗部；1=关闭
+    // 送入 AprilTag 前的 gamma：out = 255*(in/255)^gamma；<1 提亮暗部
+    // Tag.gamma_enable: 0 关闭，1 打开。缺省为打开；gamma==1 时即使打开也不改变图像
+    bool gamma_enable = true;
     double gamma = 1.0;
 
     // tag_id 在 tag_size_by_id 中则用覆盖值，否则用 tag_size

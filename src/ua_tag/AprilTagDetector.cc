@@ -424,7 +424,7 @@ struct AprilTagDetector::Impl
         for(int bb : unique_borders)
             detectors.emplace_back(new AprilTags::TagDetector(*codes, static_cast<size_t>(bb)));
 
-        if(cfg.gamma > 0.0 && std::abs(cfg.gamma - 1.0) > 1e-6)
+        if(cfg.gamma_enable && cfg.gamma > 0.0 && std::abs(cfg.gamma - 1.0) > 1e-6)
             gamma_lut = BuildGammaLut(cfg.gamma);
     }
 
@@ -540,6 +540,10 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
                 config.ignore_ids.insert(id);
         }
     }
+
+    node = fs["Tag.gamma_enable"];
+    if(!node.empty())
+        config.gamma_enable = static_cast<int>(node) != 0;
 
     node = fs["Tag.gamma"];
     if(!node.empty())

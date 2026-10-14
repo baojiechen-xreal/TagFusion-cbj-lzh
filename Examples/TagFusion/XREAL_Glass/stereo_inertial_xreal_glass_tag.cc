@@ -199,8 +199,8 @@ void LoadImages(const string &seqPath,
 
         const string leftFile = leftPath + "/" + name;
         const string rightFile = rightPath + "/" + name;
-        if(!FileExists(leftFile) || !FileExists(rightFile))
-            continue;
+        // timestamps.txt 已经给出左右同名文件。不要在这里对每帧 stat：
+        // 一条序列大约 2 万帧，在 NFS 上就是数万次元数据请求。缺图留到 imread 再报错。
 
         vTimeStamps.push_back(t);
         vstrImageLeft.push_back(leftFile);
