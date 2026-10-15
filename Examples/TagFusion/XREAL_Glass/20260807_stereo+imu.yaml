@@ -146,7 +146,7 @@ Tag.family: "tag36h11"
 Tag.hamming: 2
 Tag.black_borders: [1]
 Tag.size: 0.144
-Tag.gamma_enable: 1             # 0=no gamma before AprilTag; 1=apply Tag.gamma
+Tag.gamma_enable: 0            # 0=no gamma before AprilTag; 1=apply Tag.gamma
 Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 brightens dark regions. CLAHE is disabled
 Tag.verbose: 1
 Tag.export: 1
