@@ -59,8 +59,8 @@ public:
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
 
-    void SetTagLoopParams(const tag::TagLoopParams &params);
-    void SetTagLocalBAParams(const tag::TagLocalBAParams &params);
+    void SetTagLoopParams(const xreal_tag::TagLoopParams &params);
+    void SetTagLocalBAParams(const xreal_tag::TagLocalBAParams &params);
 
     // Offline synchronous processing (replaces the old Run() thread loop)
     bool ProcessOneKeyFrame();
@@ -158,8 +158,8 @@ protected:
                              bool &bStereoConsistent, int &nValidCameras,
                              std::string *failReason = nullptr);
     bool ValidateTagLoop(const g2o::Sim3 &gScwTag, g2o::Sim3 &gScwTag4DoF);
-    // 用冻结历史 Tag 世界角点构建当前 KF 的回环 pose-only 约束；不读实时 MapTag::GetPose()
-    std::vector<tag::TagPoseConstraint> BuildTagLoopPoseConstraints(KeyFrame *pKF);
+    // Build the current KF's loop pose-only constraints from frozen historical Tag world corners; do not read the live MapTag::GetPose()
+    std::vector<xreal_tag::TagPoseConstraint> BuildTagLoopPoseConstraints(KeyFrame *pKF);
     void CollectTagLoopMapPoints(KeyFrame *pMatchedKF, std::vector<MapPoint*> &vpMPs);
     void ResetTagLoopState();
     void ClearTagLoopReferences(const char *reason);
@@ -239,20 +239,20 @@ protected:
 
     g2o::Sim3 mSold_new;
 
-    tag::TagLoopParams mTagLoopParams;
-    tag::TagLocalBAParams mTagLocalBAParams;
+    xreal_tag::TagLoopParams tag_loop_params_;
+    xreal_tag::TagLocalBAParams tag_local_ba_params_;
 
-    bool mbTagLoopDetected = false;
+    bool tag_loop_detected_ = false;
     int mnLoopTagId = -1;
-    tag::MapTagData *mpLoopTag = nullptr;
-    KeyFrame *mpTagLoopMatchedKF = nullptr;
-    Sophus::SE3f mTagLoopTwtHistory;
-    Sophus::SE3f mTagLoopTct;
+    xreal_tag::MapTagData *mpLoopTag = nullptr;
+    KeyFrame *tag_loop_matched_key_frame_ = nullptr;
+    Sophus::SE3f tag_loop_twt_history_;
+    Sophus::SE3f tag_loop_tct_;
     g2o::Sim3 mg2oTagLoopScw;
 
-    int mnTagLoopCoincidences = 0;
-    int mnTagLoopNotFound = 0;
-    KeyFrame *mpTagLoopLastCurrentKF = nullptr;
+    int tag_loop_coincidences_ = 0;
+    int tag_loop_not_found_ = 0;
+    KeyFrame *tag_loop_last_current_key_frame_ = nullptr;
     g2o::Sim3 mg2oTagLoopLastScw;
 
     struct TagLoopReference
@@ -261,7 +261,7 @@ protected:
         KeyFrame *pHistoricalKF = nullptr;
         unsigned long lastSeenKF = 0;
     };
-    std::unordered_map<int, TagLoopReference> mTagLoopReferences;
+    std::unordered_map<int, TagLoopReference> tag_loop_references_;
     //-------
 
     long unsigned int mLastLoopKFid;

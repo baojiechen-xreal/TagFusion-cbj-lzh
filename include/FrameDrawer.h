@@ -51,7 +51,7 @@ public:
     cv::Mat DrawFrame(float imageScale=1.f);
     cv::Mat DrawRightFrame(float imageScale=1.f);
 
-    // Tag 检测输入图（原图灰度 + 可选 gamma）+ 角点叠加；无图时返回空
+    // Tag detection input image (raw grayscale + optional gamma) with corners overlaid; return empty when there is no image
     cv::Mat DrawTagDetectFrame(float imageScale=1.f);
 
     bool both;
@@ -88,15 +88,15 @@ protected:
     map<long unsigned int, cv::Point2f> mmProjectPoints;
     map<long unsigned int, cv::Point2f> mmMatchedInImage;
 
-    // Tag.detect 叠加到 ORB Current Frame 窗（Tag.show_in_orb_viewer）
+    // Overlay Tag.detect on the ORB Current Frame window (Tag.show_in_orb_viewer)
     bool mbDrawTags;
-    tag::TagFrameData mTagFrameData;
-    cv::Mat mImTagDetect, mImTagDetectRight;
+    xreal_tag::TagFrameData tag_frame_data_;
+    cv::Mat im_tag_detect_, im_tag_detect_right_;
 
-    // true: 鱼眼双目（Nleft!=-1，左右特征拼在同一 Frame）；false: PinHole 经典双目
+    // true: fisheye stereo (Nleft!=-1, left and right features share one Frame); false: classic PinHole stereo
     bool mbFisheyeStereo;
 
-    // PinHole 经典双目：左目特征对应的右目 u（与 Frame::mvuRight 一致）
+    // Classic PinHole stereo: right-image u of a left feature (same as Frame::mvuRight)
     std::vector<float> mvuRight;
 
 };

@@ -58,16 +58,16 @@ class LoopClosing;
 class System;
 class Settings;
 
-namespace ua_tag
+namespace xreal_tag
 {
 class AprilTagDetector;
-}  // namespace ua_tag
+}  // namespace xreal_tag
 
-namespace tag
+namespace xreal_tag
 {
 class TagTracker;
 class TagViewer;
-}  // namespace tag
+}  // namespace xreal_tag
 
 class Tracking
 {  
@@ -123,17 +123,17 @@ public:
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder="");
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, Map* pMap);
 
-    // 导出 MapTag 四角点与相机 Pose 轨迹（Shutdown 前调用）
+    // Export MapTag corners and the camera pose trajectory (call before Shutdown)
     void SaveTagExports();
 
-    // 在线覆盖写入当前 TagMap（LocalMapping 更新 MapTag 后调用）
+    // Overwrite the current TagMap online (call after LocalMapping updates a MapTag)
     void SaveTagMapOnline();
 
-    // MapTag 首次注册时写几何日志（LocalMapping 新建 Tag 后调用）
+    // Write the geometry log when a MapTag is first registered (call after LocalMapping creates a Tag)
     void LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id, int left_idx,
-                                    int right_idx, tag::MapTagData *pTag);
+                                    int right_idx, xreal_tag::MapTagData *pTag);
 
-    // yaml Tag.size / Tag.size_by_id：按 id 查询物理边长（米）
+    // yaml Tag.size / Tag.size_by_id: look up the physical side length by id (meters)
     double GetConfiguredTagSize(int tag_id) const;
 
     float GetImageScale();
@@ -170,14 +170,14 @@ public:
 
     cv::Mat mImGray;
 
-    // Tag 总开关（Tag.enable=0：不检测 / 不建图 / 不优化 / 不因 Tag 插 KF）
-    bool mbTagEnabled = true;
-    // 上一帧前端 Tag 耗时（DetectAndStoreTags / IPPE+双目消歧；不含 imshow / save_vis）
+    // Tag master switch (Tag.enable=0: no detection / no mapping / no optimization / do not insert a KF because of a Tag)
+    bool tag_enabled_ = true;
+    // Front-end Tag time of the previous frame (DetectAndStoreTags / IPPE + stereo disambiguation; excludes imshow / save_vis)
     double mLastTagDetectMs = 0.0;
     double mLastTagIppeMs = 0.0;
-    bool mbTagSaveVis = false;
-    std::string mTagSaveVisDir = "tag_vis";
-    bool mbTagShowInOrbViewer = false;  // yaml: Tag.show_in_orb_viewer；离线主线程 imshow
+    bool tag_save_vis_ = false;
+    std::string tag_save_vis_dir_ = "tag_vis";
+    bool tag_show_in_orb_viewer_ = false;  // yaml: Tag.show_in_orb_viewer; offline main-thread imshow
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -236,30 +236,30 @@ protected:
     // Main tracking function. It is independent of the input sensor.
     void Track();
 
-    // Tag 跟踪入口：IPPE / 双目消歧（检测已在 Frame 构造完成；扩图在 LocalMapping）
+    // Tag tracking entry: IPPE / stereo disambiguation (detection already finished in the Frame constructor; map extension is in LocalMapping)
     void TagTrack();
     void EstimateAndVisualizeTagPoses();
 
-    // 双目 Tag 地图唯一入口：ORB TrackLocalMap 成功且 mState==OK 后，
-    // 单帧建图并对齐到当前 ORB Tcw。IMU_STEREO 还须等 VIBA 1 结束（且不在 InitializeIMU 中）。
-    // 成功则强制关键帧；返回 true 表示本帧已建 KF。
+    // Sole entry for the stereo Tag map: after ORB TrackLocalMap succeeds and mState==OK,
+    // initialize from one frame and align to the current ORB Tcw. IMU_STEREO must also wait until VIBA 1 has finished (and not during InitializeIMU).
+    // On success, force a keyframe; return true if this frame already created a KF.
     bool TryInitializeTagMapAfterOrbTracking();
 
-    // Tag 地图初始化成功后的导出/日志收尾
+    // Export and log wrap-up after Tag map initialization succeeds
     void OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF);
 
-    // 统一 pose-only 入口：useTags 且开关开启时构建 Tag 快照并联合优化（入口内重置优化外点）
+    // Shared pose-only entry: when useTags and the switch are on, build a Tag snapshot and optimize jointly (optimization outliers are reset inside the entry)
     int OptimizeCurrentPose(bool useTags);
 
-    // 离线模式不启动 Pangolin Viewer；仅 cv::imshow 两窗：
-    // ORB+Tag 混合当前帧，以及增强 Tag 检测图
+    // Offline mode does not start the Pangolin Viewer; only two cv::imshow windows:
+    // the mixed ORB+Tag current frame, and the enhanced Tag detection image
     void ShowOfflineImshowWindows();
 
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
 
     // Map initialization for monocular
-    // 暂不接入 Tag 米制初始化；Tag 初始化仅在双目路径启用
+    // Tag metric initialization is not connected yet; Tag initialization is enabled only on the stereo path
     void MonocularInitialization();
     //void CreateNewMapPoints();
     void CreateInitialMapMonocular();
@@ -280,9 +280,9 @@ protected:
     void SearchLocalPoints();
 
     bool NeedNewKeyFrame();
-    // tagInitResult 非空时：AddKeyFrame → CommitTagInitialization → InsertKeyFrame
-    // 返回 true 表示已创建并提交关键帧
-    bool CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResult = nullptr);
+    // When tagInitResult is non-null: AddKeyFrame -> CommitTagInitialization -> InsertKeyFrame
+    // Return true if the keyframe was created and submitted
+    bool CreateNewKeyFrame(const xreal_tag::TagInitializer::Result *tagInitResult = nullptr);
 
     // Perform preintegration from last frame
     void PreintegrateIMU();
@@ -323,12 +323,12 @@ protected:
     ORBextractor* mpIniORBextractor;
 
     // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
-    ua_tag::AprilTagDetector* mpAprilTagDetector;
+    xreal_tag::AprilTagDetector* april_tag_detector_;
 
-    // Tag 模块（双目 Tag 地图由 TryInitializeTagMapAfterOrbTracking 在 ORB 跟踪稳定后建立）
-    tag::TagInitializer* mpTagInitializer;
-    tag::TagTracker* mpTagTracker;
-    tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
+    // Tag module (the stereo Tag map is built by TryInitializeTagMapAfterOrbTracking after ORB tracking is stable)
+    xreal_tag::TagInitializer* tag_initializer_;
+    xreal_tag::TagTracker* tag_tracker_;
+    xreal_tag::TagViewer* tag_viewer_;  // optional; created when Tag.viewer=1
 
     //BoW
     ORBVocabulary* mpORBVocabulary;
@@ -426,14 +426,14 @@ protected:
 
     void newParameterLoader(Settings* settings);
 
-    // System.saveOnlinePose=1 时：OK 后每帧 append 一行 TUM (t tx ty tz qx qy qz qw, Twc)
+    // When System.saveOnlinePose=1: after OK, append one TUM line per frame (t tx ty tz qx qy qz qw, Twc)
     void AppendOnlinePoseTUM();
 
     bool mbSaveOnlinePose = false;
     std::string mSaveOnlinePoseFile = "OnlineCameraTrajectory.txt";
 
-    // Tag 联合 PoseOptimization / PoseInertial*（Tag.pose_optimization 共用开关）
-    tag::TagPoseOptParams mTagPoseOptParams;
+    // Joint Tag PoseOptimization / PoseInertial* (shared switch Tag.pose_optimization)
+    xreal_tag::TagPoseOptParams tag_pose_opt_params_;
 
     std::ofstream mOnlinePoseFile;
 

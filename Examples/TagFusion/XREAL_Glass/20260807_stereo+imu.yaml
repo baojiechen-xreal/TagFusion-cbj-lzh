@@ -1,0 +1,196 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# XREAL Glass cam0+cam1+imu0 — TagFusion stereo-inertial
+# Sequence: /home/geneta/dataset/01-1
+# Device: q3hy (SN L623X00088)
+#
+# Path layout（compatible with stereo_inertial_xreal_glass_tag path search）:
+#   /home/geneta/dataset/01-1
+#   /home/geneta/dataset/01-1/raw_data/glass
+#   /home/geneta/dataset/01-1/raw_data/glass/cam0/images
+#
+# Resolved as:
+#   .../raw_data/glass/cam0/images  +  .../raw_data/glass/cam1/images
+#   .../raw_data/glass/imu0.txt
+#   timestamps.txt: "m0000000.pgm <t>"（same names on left and right）
+#   imu0.txt: "<t> <temp> gx gy gz ax ay az"  （rad/s, m/s^2）
+#
+# Intrinsics / extrinsics from:
+#   /home/geneta/dataset/01-1/ground_truth/calib/calib.yaml
+# Camera.model: fisheye6202 → ORB-SLAM3 KannalaBrandt8 approximated with kc[0:4]
+# Stereo.T_c1_c2 built from cam0_q_cam1 (Hamilton qx,qy,qz,qw) + cam0_p_cam1
+# IMU.T_b_c1 built from cam0 imu_q_cam / imu_p_cam (body = imu0)
+# Resolution (W x H): 640 x 512
+# Camera FPS: ~60
+# IMU: imu0.txt measured ~1000 Hz（do not write 200）
+#
+# Run:
+#   SETTINGS=./20260807_stereo+imu.yaml ./run_xreal_glass_stereo_inertial.sh \
+#     /home/geneta/dataset/01-1/raw_data/glass
+#--------------------------------------------------------------------------------------------
+
+File.version: "1.0"
+
+System.saveOnlinePose: 1
+System.saveOnlinePoseFile: "OnlineCameraTrajectory.txt"
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters
+#--------------------------------------------------------------------------------------------
+Camera.type: "KannalaBrandt8"
+
+# Left = cam0
+Camera1.fx: 238.4042410017
+Camera1.fy: 238.5116901337
+Camera1.cx: 324.6963505947
+Camera1.cy: 243.4401718335
+
+Camera1.k1:  0.0010037618107762093
+Camera1.k2:  0.008895943577831642
+Camera1.k3: -0.016388722803763738
+Camera1.k4:  0.015306190751537468
+
+# Right = cam1
+Camera2.fx: 238.1648391162
+Camera2.fy: 238.3401459786
+Camera2.cx: 316.8720834859
+Camera2.cy: 266.6127622166
+
+Camera2.k1:  0.002452983607957147
+Camera2.k2:  0.0056379781394234425
+Camera2.k3: -0.01368141131139111
+Camera2.k4:  0.014057990984231517
+
+Camera.width: 640
+Camera.height: 512
+
+# adjacent timestamps are about 0.01667s
+Camera.fps: 60
+
+Camera.RGB: 1
+
+Camera1.overlappingBegin: 0
+Camera1.overlappingEnd: 639
+Camera2.overlappingBegin: 0
+Camera2.overlappingEnd: 639
+
+Stereo.ThDepth: 40.0
+
+# T_c1_c2：cam1 pose in the cam0 frame; baseline about 0.1375 m
+Stereo.T_c1_c2: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [0.982466123700815,  0.010406054723481,  0.186150556822661,  0.136993335196344,
+         -0.012435800384956,  0.999875239622072,  0.009739407553270, -0.000205194166074,
+         -0.186025983800866, -0.011883569152198,  0.982472958475257, -0.012126014824532,
+          0.0, 0.0, 0.0, 1.0]
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters  （body = imu0; T_b_c1 from calib.yaml cam0 imu_q_cam / imu_p_cam）
+# imu0.txt measured about 1000 Hz (mean dt=0.001s), not 200 Hz.
+# Noise matches calib.yaml imu_noises:
+#   [gyro_sigma, gyro_walk, accel_sigma, accel_walk]
+#--------------------------------------------------------------------------------------------
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [ 0.999758837028498, -0.018769980097049,  0.011399808357268, -0.008043468281928,
+          -0.018768590495112, -0.999823828294885, -0.000228876794367,  0.004440908525239,
+           0.011402096046466,  0.000014863262979, -0.999934993879517, -0.004496215845058,
+           0.0, 0.0, 0.0, 1.0]
+
+IMU.NoiseGyro: 3.5e-04
+IMU.NoiseAcc: 6.67e-03
+IMU.GyroWalk: 1.0e-05
+IMU.AccWalk: 6.8e-04
+IMU.Frequency: 1000.0
+IMU.InsertKFsWhenLost: 1
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+# Offline serial mode does not start the Pangolin viewer thread; Viewer.enable and the 3D parameters below are ignored.
+# Use Tag.show_in_orb_viewer below for the image window (main-thread cv::imshow; slower only, serial order unchanged).
+#--------------------------------------------------------------------------------------------
+Viewer.enable: 1
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.5
+Viewer.ViewpointZ: -1.2
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0
+Viewer.showTagMap: 1
+Viewer.showTagKFs: 1
+
+#--------------------------------------------------------------------------------------------
+# Tag Parameters
+#--------------------------------------------------------------------------------------------
+Tag.enable: 0
+Tag.family: "tag36h11"
+Tag.hamming: 2
+Tag.black_borders: [1]
+Tag.size: 0.144
+Tag.gamma_enable: 0            # 0=no gamma before AprilTag; 1=apply Tag.gamma
+Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 brightens dark regions. CLAHE is disabled
+Tag.verbose: 1
+Tag.export: 1
+Tag.export_dir: "tag_export"
+Tag.viewer: 0                   # ignored in offline mode (TagViewer thread is not started)
+Tag.save_vis: 0
+Tag.save_vis_dir: "tag_vis"
+Tag.show_in_orb_viewer: 1       # 1=main-thread imshow: Current Frame (ORB+Tag) + Tag Detect; Pangolin stays off
+
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
+Tag.corner_sigma: 2.0
+Tag.min_inlier_corners: 3
+Tag.fixed_only: 0
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1
+
+# ========================== adaptive corner-factor weights ==========================
+Tag.factor_weight.enable: 1
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
+Tag.factor_weight.lambda_s: 3.0
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
+Tag.factor_weight.lambda_theta: 1.0
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
+Tag.factor_weight.w_min: 0.001
+Tag.factor_weight.verbose: 1          # 1=print S, theta, delta-phi, delta-e and per-term weights
+
+# ========================== loop closure ==========================
+Tag.loop.enable: 1
+Tag.loop.min_history_observations: 2
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.15 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
+Tag.loop.verbose: 1

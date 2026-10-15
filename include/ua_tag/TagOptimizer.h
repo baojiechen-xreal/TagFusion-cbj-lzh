@@ -11,11 +11,11 @@ namespace ORB_SLAM3 {
 
 class Frame;
 
-namespace tag {
+namespace xreal_tag {
 
 class MapTagData;
 
-// Tag 优化 API（无独立线程；由 Tracking / TagTracker 同步调用）
+// Tag optimization API (no dedicated thread; called synchronously by Tracking / TagTracker)
 class TagOptimizer
 {
 public:
@@ -24,25 +24,25 @@ public:
 
     TagOptimizer() = delete;
 
-    // Motion-only BA（GTSAM）核心接口：直接使用 FIXED Tag 及其世界系 3D 角点。
-    //   1) FIXED Tag 世界系角点作为 Point3 状态，NonlinearEquality 钉死
-    //   2) 去畸变角点 + GenericProjectionFactor<Pose3,Point3,Cal3_S2>（Huber）
-    //   3) 优化后按 chi2 标外点
-    //   4) 仅内点、去 Huber 再优化一轮
-    // 初值优先 Tcw_pred，否则用 frame 已有 Pose；成功则 SetPose 并返回 true。
-    // 失败不清除 frame 上已有 Pose（保留匀速预测兜底），返回 false。
-    static bool PoseOptimization(
+    // Core Motion-only BA (GTSAM) API: uses each FIXED Tag and its world-frame 3D corners directly.
+    //   1) World-frame corners of each FIXED Tag are Point3 states, pinned by NonlinearEquality
+    //   2) Undistorted corners + GenericProjectionFactor<Pose3,Point3,Cal3_S2> (Huber)
+    //   3) After optimization, mark outliers by chi2
+    //   4) Optimize once more on inliers only, with Huber removed
+    // The seed prefers Tcw_pred, otherwise the Pose already on the frame; on success SetPose and return true.
+    // On failure, do not clear a Pose already on the frame (constant-velocity prediction stays as fallback) and return false.
+    static bool OptimizePose(
         Frame &frame,
         const TagContainer &fixed_tags,
         const std::optional<Sophus::SE3f> &Tcw_pred = std::nullopt,
         bool verbose = false);
 
-    // 单帧 Tag 初始化后估计第二帧位姿：复用 PoseOptimization(TagContainer)。
-    // fixed_tags：本优化中临时固定世界位姿的 Tag（通常来自 Result::tags，状态可为 ACTIVE）。
-    // 共视 Tag 门槛由 TagInitializer::TryInitialize 预先检查，此处不再重复判断。
-    // 若未给 Tcw_pred 且 frame 无 Pose，则用共视 Tag 的 IPPE 估初值。
-    // 成功则写入 Tcw_out（与 frame.GetPose() 一致）；失败不修改 Tcw_out。
-    static bool PoseOptimizationForSecondFrame(
+    // After single-frame Tag init, estimate the second-frame pose by reusing OptimizePose(TagContainer).
+    // fixed_tags: each Tag whose world pose is held fixed for this optimization (usually from Result::tags; state may be ACTIVE).
+    // The covisible Tag threshold is checked beforehand by TagInitializer::TryInitialize and is not checked again here.
+    // If Tcw_pred is omitted and the frame has no Pose, seed Tcw from IPPE of each covisible Tag.
+    // On success write Tcw_out (identical to frame.GetPose()); on failure leave Tcw_out unchanged.
+    static bool OptimizePoseForSecondFrame(
         Frame &second_frame,
         const TagContainer &fixed_tags,
         Sophus::SE3f &Tcw_out,
@@ -50,7 +50,7 @@ public:
         bool verbose = false);
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

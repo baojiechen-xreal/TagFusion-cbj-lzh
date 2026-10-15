@@ -8,36 +8,36 @@
 
 namespace ORB_SLAM3
 {
-namespace ua_tag
+namespace xreal_tag
 {
 
-// 在单张图上绘制指定相机观测（默认左目/单目）
-cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
-                 tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO);
+// Draw the observations of one camera on a single image (default left / mono)
+cv::Mat DrawTags(const cv::Mat &image, const xreal_tag::TagFrameData &frame_data,
+                 xreal_tag::CameraId camera_id = xreal_tag::CameraId::LEFT_OR_MONO);
 
-// 在已有 BGR 图上叠加 Tag（imageScale 与 FrameDrawer 一致：角点坐标除以 scale）
-void OverlayTags(cv::Mat &image, const tag::TagFrameData &frame_data,
-                 tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO,
+// Overlay each Tag on an existing BGR image (imageScale matches FrameDrawer: corner coordinates are divided by scale)
+void OverlayTags(cv::Mat &image, const xreal_tag::TagFrameData &frame_data,
+                 xreal_tag::CameraId camera_id = xreal_tag::CameraId::LEFT_OR_MONO,
                  float imageScale = 1.f);
 
-// 左右目分别绘制后水平拼接（同步并列可视化）
+// Draw the left and right images separately, then concatenate them horizontally (synchronized side-by-side view)
 cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
-                       const tag::TagFrameData &frame_data);
+                       const xreal_tag::TagFrameData &frame_data);
 
-// 单目/仅左目：绘制并保存
+// Mono / left only: draw and save
 bool SaveTagsVis(const cv::Mat &image,
-                 const tag::TagFrameData &frame_data,
+                 const xreal_tag::TagFrameData &frame_data,
                  const std::string &savePath);
 
-// 双目：左右检测帧并排保存
+// Stereo: save the left and right detection frames side by side
 bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
-                 const tag::TagFrameData &frame_data,
+                 const xreal_tag::TagFrameData &frame_data,
                  const std::string &savePath);
 
-// 确保输出目录存在；成功返回 true
+// Ensure the output directory exists; return true on success
 bool EnsureDir(const std::string &dirPath);
 
-}  // namespace ua_tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

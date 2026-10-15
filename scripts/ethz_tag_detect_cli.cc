@@ -1,7 +1,7 @@
 /**
  * CLI wrapper around Thirdparty/apriltag (ethz_apriltag2 / basalt stack).
  * Used by scripts/tag_detect.py so Python detection shares the same backend
- * as ORB-SLAM3 ua_tag::AprilTagDetector.
+ * as ORB-SLAM3 xreal_tag::AprilTagDetector.
  *
  * Usage:
  *   ethz_tag_detect [--family tag36h11] [--hamming 2] [--black-border 1] image.png

@@ -80,8 +80,8 @@ Frame::Frame(const Frame &frame)
      mvRightToLeftMatch(frame.mvRightToLeftMatch), mvStereo3Dpoints(frame.mvStereo3Dpoints),
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
      mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false),
-     mTagFrameData(frame.mTagFrameData), mImTagDetect(frame.mImTagDetect),
-     mImTagDetectRight(frame.mImTagDetectRight),
+     tag_frame_data_(frame.tag_frame_data_), im_tag_detect_(frame.im_tag_detect_),
+     im_tag_detect_right_(frame.im_tag_detect_right_),
      mTimeTagDetect_ms(frame.mTimeTagDetect_ms)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
@@ -110,7 +110,7 @@ Frame::Frame(const Frame &frame)
 }
 
 
-Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, Frame* pPrevF, const IMU::Calib &ImuCalib, ua_tag::AprilTagDetector* pTagDetector, GeometricCamera* pTagCameraRight)
+Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, Frame* pPrevF, const IMU::Calib &ImuCalib, xreal_tag::AprilTagDetector* pTagDetector, GeometricCamera* pTagCameraRight)
     :mpcpi(NULL), mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
      mpCamera(pCamera) ,mpCamera2(pTagCameraRight), mbHasPose(false), mbHasVelocity(false)
@@ -141,7 +141,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndExtORB - time_StartExtORB).count();
 #endif
 
-    // AprilTag：左右目都检测（右目必须用独立 Camera2，禁止回退左目）
+    // AprilTag: detect on both left and right (the right camera must use an independent Camera2; do not fall back to the left)
     DetectAndStoreTags(pTagDetector, imLeft, imRight, pTagCameraRight);
 
     N = mvKeys.size();
@@ -301,7 +301,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
 }
 
 
-Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib, ua_tag::AprilTagDetector* pTagDetector)
+Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib, xreal_tag::AprilTagDetector* pTagDetector)
     :mpcpi(NULL),mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(static_cast<Pinhole*>(pCamera)->toK()), mK_(static_cast<Pinhole*>(pCamera)->toK_()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL),mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera),
@@ -399,13 +399,13 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
 }
 
 
-void Frame::DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &imLeft,
+void Frame::DetectAndStoreTags(xreal_tag::AprilTagDetector* pTagDetector, const cv::Mat &imLeft,
                                const cv::Mat &imRight, GeometricCamera* pCamRight)
 {
     const auto t0 = std::chrono::steady_clock::now();
-    mTagFrameData.Clear();
-    mImTagDetect.release();
-    mImTagDetectRight.release();
+    tag_frame_data_.Clear();
+    im_tag_detect_.release();
+    im_tag_detect_right_.release();
     mTimeTagDetect_ms = 0.0;
     auto finish_timer = [&]() {
         mTimeTagDetect_ms = std::chrono::duration<double, std::milli>(
@@ -426,17 +426,17 @@ void Frame::DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv:
         exit(-1);
     }
 
-    // 左目/单目
-    std::vector<tag::TagObservation> observations;
-    if(pTagDetector->DetectCorners(imLeft, observations, tag::CameraId::LEFT_OR_MONO,
+    // Left / monocular
+    std::vector<xreal_tag::TagObservation> observations;
+    if(pTagDetector->DetectCorners(imLeft, observations, xreal_tag::CameraId::LEFT_OR_MONO,
                                    mpCamera))
     {
         for(size_t i = 0; i < observations.size(); ++i)
-            mTagFrameData.Add(std::move(observations[i]));
+            tag_frame_data_.Add(std::move(observations[i]));
     }
-    mImTagDetect = pTagDetector->GetLastPreprocessedImage().clone();
+    im_tag_detect_ = pTagDetector->GetLastPreprocessedImage().clone();
 
-    // 右目（双目）：必须独立 Camera2，禁止回退左目
+    // Right (stereo): an independent Camera2 is required; do not fall back to the left camera
     if(!imRight.empty())
     {
         GeometricCamera *cam_right = pCamRight ? pCamRight : mpCamera2;
@@ -449,13 +449,13 @@ void Frame::DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv:
         }
 
         observations.clear();
-        if(pTagDetector->DetectCorners(imRight, observations, tag::CameraId::RIGHT,
+        if(pTagDetector->DetectCorners(imRight, observations, xreal_tag::CameraId::RIGHT,
                                        cam_right))
         {
             for(size_t i = 0; i < observations.size(); ++i)
-                mTagFrameData.Add(std::move(observations[i]));
+                tag_frame_data_.Add(std::move(observations[i]));
         }
-        mImTagDetectRight = pTagDetector->GetLastPreprocessedImage().clone();
+        im_tag_detect_right_ = pTagDetector->GetLastPreprocessedImage().clone();
     }
 #else
     (void)pTagDetector;
@@ -1126,7 +1126,7 @@ void Frame::setIntegrated()
     mbImuPreintegrated = true;
 }
 
-Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Sophus::SE3f& Tlr,Frame* pPrevF, const IMU::Calib &ImuCalib, ua_tag::AprilTagDetector* pTagDetector)
+Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Sophus::SE3f& Tlr,Frame* pPrevF, const IMU::Calib &ImuCalib, xreal_tag::AprilTagDetector* pTagDetector)
         :mpcpi(NULL), mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)),  mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
          mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(pCamera2),
          mbHasPose(false), mbHasVelocity(false)
@@ -1161,7 +1161,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndExtORB - time_StartExtORB).count();
 #endif
 
-    // AprilTag：左右目都检测（与 ORB 特征数无关；须在 N==0 early-return 之前）
+    // AprilTag: detect on both left and right (independent of the ORB feature count; must run before the N==0 early return)
     DetectAndStoreTags(pTagDetector, imLeft, imRight, mpCamera2);
 
     Nleft = mvKeys.size();

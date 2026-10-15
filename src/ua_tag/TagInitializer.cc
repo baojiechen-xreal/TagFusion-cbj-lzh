@@ -12,7 +12,7 @@
 #include <utility>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -46,23 +46,23 @@ void LogFrameTagAmbiguityRatios(const Frame &frame, const char *label)
                   << std::endl;
     };
 
-    for(const TagObservation &obs : frame.mTagFrameData.left)
+    for(const TagObservation &obs : frame.tag_frame_data_.left_)
         log_obs(obs, "left");
-    for(const TagObservation &obs : frame.mTagFrameData.right)
+    for(const TagObservation &obs : frame.tag_frame_data_.right_)
         log_obs(obs, "right");
 }
 
 }  // namespace
 
-TagInitializer::TagInitializer(const std::string &settingsFile)
+TagInitializer::TagInitializer(const std::string &settings_file)
 {
-    cv::FileStorage fs(settingsFile, cv::FileStorage::READ);
+    cv::FileStorage fs(settings_file, cv::FileStorage::READ);
     if(!fs.isOpened())
         return;
 
     cv::FileNode node = fs["Tag.size"];
     if(!node.empty())
-        mTagSize = static_cast<double>(node);
+        tag_size_ = static_cast<double>(node);
 
     node = fs["Tag.size_by_id"];
     if(!node.empty() && node.isSeq())
@@ -78,21 +78,21 @@ TagInitializer::TagInitializer(const std::string &settingsFile)
             const double sz = static_cast<double>(size_node);
             if(id < 0 || sz <= 0.0)
                 continue;
-            mTagSizeById[id] = sz;
+            tag_size_by_id_[id] = sz;
         }
     }
 
     node = fs["Tag.verbose"];
     if(!node.empty())
-        mbVerbose = static_cast<int>(node) != 0;
+        verbose_ = static_cast<int>(node) != 0;
 }
 
 double TagInitializer::GetTagSize(int tag_id) const
 {
-    const auto it = mTagSizeById.find(tag_id);
-    if(it != mTagSizeById.end() && it->second > 0.0)
+    const auto it = tag_size_by_id_.find(tag_id);
+    if(it != tag_size_by_id_.end() && it->second > 0.0)
         return it->second;
-    return mTagSize;
+    return tag_size_;
 }
 
 bool TagInitializer::HasTwoValidIppeCandidates(const TagObservation &obs) noexcept
@@ -104,7 +104,7 @@ bool TagInitializer::HasTwoValidIppeCandidates(const TagObservation &obs) noexce
     return est.candidates[0].valid && est.candidates[1].valid;
 }
 
-// 按 tag_id 收集观测；同 id 时左目优先于右目（要求两个有效 IPPE 候选）
+// Collect observations by tag_id; for the same id the left camera wins over the right (requires two valid IPPE candidates)
 void TagInitializer::CollectObservationById(TagObsByIdMap &by_id,
                                             const TagObservation &obs)
 {
@@ -118,7 +118,7 @@ void TagInitializer::CollectObservationById(TagObsByIdMap &by_id,
         return;
     }
 
-    // 已有观测时：左目优先于右目；同相机保留先写入的那条
+    // When an observation already exists: the left camera wins over the right; the same camera keeps the entry written first
     const TagObservation &prev = *it->second;
     if(prev.camera_id == CameraId::LEFT_OR_MONO)
         return;
@@ -126,24 +126,24 @@ void TagInitializer::CollectObservationById(TagObsByIdMap &by_id,
         it->second = &obs;
 }
 
-// 按 tag_id 收集参考帧和当前帧的多个观测；同 id 时左目优先于右目（不要求 IPPE 无歧义）
+// Collect observations of the reference frame and the current frame by tag_id; for the same id the left camera wins over the right (IPPE need not be unambiguous)
 TagInitializer::TagObsByIdMap TagInitializer::CollectObservationsById(const Frame &frame)
 {
     TagObsByIdMap by_id;
-    for(const TagObservation &obs : frame.mTagFrameData.left)
+    for(const TagObservation &obs : frame.tag_frame_data_.left_)
         CollectObservationById(by_id, obs);
-    for(const TagObservation &obs : frame.mTagFrameData.right)
+    for(const TagObservation &obs : frame.tag_frame_data_.right_)
         CollectObservationById(by_id, obs);
     return by_id;
 }
 
-// 按 tag_id 收集无歧义且有效的 IPPE 解的单个观测；同 id 时左目优先于右目
+// Collect one unambiguous valid IPPE observation per tag_id; for the same id the left camera wins over the right
 void TagInitializer::CollectUnambiguousObservation(UnambiguousObsMap &unambiguous,
                                                    const TagObservation &obs)
 {
-    // 无歧义且有效的 IPPE 解：已消歧选中，且候选 valid
+    // Unambiguous valid IPPE solution: already disambiguated, and the selected candidate is valid
     if(!obs.IsDetectValid() || !obs.pose_estimate.has_value() ||
-       obs.pose_estimate->Selected() == nullptr)
+       obs.pose_estimate->GetSelectedCandidate() == nullptr)
         return;
 
     auto it = unambiguous.find(obs.tag_id);
@@ -153,7 +153,7 @@ void TagInitializer::CollectUnambiguousObservation(UnambiguousObsMap &unambiguou
         return;
     }
 
-    // 已有观测时：左目优先于右目；同相机保留先写入的那条
+    // When an observation already exists: the left camera wins over the right; the same camera keeps the entry written first
     const TagObservation &prev = *it->second;
     if(prev.camera_id == CameraId::LEFT_OR_MONO)
         return;
@@ -161,14 +161,14 @@ void TagInitializer::CollectUnambiguousObservation(UnambiguousObsMap &unambiguou
         it->second = &obs;
 }
 
-// 按 tag_id 收集无歧义且有效的 IPPE 解的多个观测；同 id 时左目优先于右目
+// Collect unambiguous valid IPPE observations by tag_id; for the same id the left camera wins over the right
 TagInitializer::UnambiguousObsMap TagInitializer::CollectUnambiguousObservations(
     const Frame &frame)
 {
     UnambiguousObsMap unambiguous;
-    for(const TagObservation &obs : frame.mTagFrameData.left)
+    for(const TagObservation &obs : frame.tag_frame_data_.left_)
         CollectUnambiguousObservation(unambiguous, obs);
-    for(const TagObservation &obs : frame.mTagFrameData.right)
+    for(const TagObservation &obs : frame.tag_frame_data_.right_)
         CollectUnambiguousObservation(unambiguous, obs);
     return unambiguous;
 }
@@ -176,7 +176,7 @@ TagInitializer::UnambiguousObsMap TagInitializer::CollectUnambiguousObservations
 TagInitializer::CommonTagObsMap TagInitializer::FindCommonTagObservations(
     const Frame &frame, const Frame &ref_frame)
 {
-    // 收集当前帧和参考帧的观测（以id为索引）
+    // Collect observations of the current frame and the reference frame (indexed by id)
     const TagObsByIdMap cur_by_id = CollectObservationsById(frame);
     const TagObsByIdMap ref_by_id = CollectObservationsById(ref_frame);
 
@@ -241,7 +241,7 @@ float TagInitializer::ComputeTagCornerReprojRmse(
         if(P_c.z() <= 0.0f)
             return std::numeric_limits<float>::infinity();
 
-        // GeometricCamera::project：鱼眼为畸变原图像素，与 corners_raw / ORB BA 一致
+        // GeometricCamera::project: for fisheye this is distorted raw-image pixels, consistent with corners_raw / ORB BA
         const cv::Point2f uv = pCamera->project(cv::Point3f(P_c.x(), P_c.y(), P_c.z()));
         const double dx = static_cast<double>(uv.x - corners_obs[i].x);
         const double dy = static_cast<double>(uv.y - corners_obs[i].y);
@@ -256,10 +256,10 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
                                                 TwoViewAmbiguityResult &out) const
 {
     out = TwoViewAmbiguityResult{};
-    if(!pCamera || mTagSize <= 0.0 || common_obs.empty())
+    if(!pCamera || tag_size_ <= 0.0 || common_obs.empty())
         return false;
 
-    // 固定 T_21 下，一对 (i_ref, i_cur) 的正向/反向重投影误差平均（按 tag_id 取边长）
+    // With T_21 fixed, the mean of the forward and backward reprojection errors of one (i_ref, i_cur) pair (side length looked up by tag_id)
     auto ComputePairReprojError =
         [&](const Sophus::SE3f &T_21, const Sophus::SE3f &T_12,
             const TagObservation &obs_ref, const TagObservation &obs_cur,
@@ -270,14 +270,14 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
             return std::numeric_limits<float>::infinity();
 
         std::vector<cv::Point3f> object_pts;
-        ua_tag::BuildSquareObjectPoints(GetTagSize(obs_ref.tag_id), object_pts);
+        xreal_tag::BuildSquareObjectPoints(GetTagSize(obs_ref.tag_id), object_pts);
 
-        // 观测用 corners_raw，与 GeometricCamera::project（原图像素 / KB）同域
-        const Sophus::SE3f T_c2t_pred = T_21 * est_ref.candidates[i_ref].T_ct;
+        // Observations use corners_raw, the same domain as GeometricCamera::project (raw-image pixels / KB)
+        const Sophus::SE3f T_c2t_pred = T_21 * est_ref.candidates[i_ref].t_ct;
         const float err_12 = ComputeTagCornerReprojRmse(
             T_c2t_pred, obs_cur.corners_raw, pCamera, object_pts);
 
-        const Sophus::SE3f T_c1t_pred = T_12 * est_cur.candidates[i_cur].T_ct;
+        const Sophus::SE3f T_c1t_pred = T_12 * est_cur.candidates[i_cur].t_ct;
         const float err_21 = ComputeTagCornerReprojRmse(
             T_c1t_pred, obs_ref.corners_raw, pCamera, object_pts);
 
@@ -287,7 +287,7 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
         return 0.5f * (err_12 + err_21);
     };
 
-    // 固定 T_21：每个共视 Tag 取 4 种组合中最小双向误差，再平均
+    // With T_21 fixed: each covisible Tag takes the minimum bidirectional error among the 4 combinations, then those minima are averaged
     auto EvaluateMeanReprojError = [&](const Sophus::SE3f &T_21,
                                        float &mean_err) -> bool {
         const Sophus::SE3f T_12 = T_21.inverse();
@@ -325,7 +325,7 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
         return true;
     };
 
-    // 1) 在全部共视 Tag 的 2x2 组合上枚举 T_21，选全局平均重投影最小者，固定T_21
+    // 1) Enumerate T_21 over the 2x2 combinations of every covisible Tag, pick the one with the smallest global mean reprojection, and fix T_21
     float best_mean_err = std::numeric_limits<float>::infinity();
     Sophus::SE3f best_T21;
 
@@ -338,13 +338,13 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
         {
             if(!est_ref.candidates[i_ref].valid)
                 continue;
-            const Sophus::SE3f &T_c1t = est_ref.candidates[i_ref].T_ct;
+            const Sophus::SE3f &T_c1t = est_ref.candidates[i_ref].t_ct;
 
             for(int i_cur = 0; i_cur < 2; ++i_cur)
             {
                 if(!est_cur.candidates[i_cur].valid)
                     continue;
-                const Sophus::SE3f &T_c2t = est_cur.candidates[i_cur].T_ct;
+                const Sophus::SE3f &T_c2t = est_cur.candidates[i_cur].t_ct;
                 const Sophus::SE3f T_21 = T_c2t * T_c1t.inverse();
 
                 float mean_err = std::numeric_limits<float>::infinity();
@@ -367,7 +367,7 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
     out.mean_reproj_error = best_mean_err;
 
     const float translation_norm = out.T_21.translation().norm();
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] best two-view solution"
                   << " mean_reproj_error=" << out.mean_reproj_error << " px"
                   << " (need < " << kMaxMeanReprojErrorPx << " px)"
@@ -378,7 +378,7 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
     if(out.mean_reproj_error >= kMaxMeanReprojErrorPx ||
        translation_norm <= kMinTranslationNormM)
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] TryInitializeTwoFrames failed"
                       << " (best solution rejected"
                       << ", mean_reproj_error=" << out.mean_reproj_error << " px"
@@ -387,8 +387,8 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
         return false;
     }
 
-    // 2) 固定全局最优 T_21*，对每个共视 Tag 遍历 4 种 IPPE 组合，
-    //    取双向重投影之和最小者作为消歧结果并回写
+    // 2) Fix the global optimum T_21* and, for each covisible Tag, try the 4 IPPE combinations;
+    //    write back the combination with the smallest sum of bidirectional reprojection errors as the disambiguation result
     const Sophus::SE3f T_12 = out.T_21.inverse();
     for(const auto &kv : common_obs)
     {
@@ -422,8 +422,8 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
 
         out.selected_ref_candidate[tag_id] = best_i_ref;
         out.selected_cur_candidate[tag_id] = best_i_cur;
-        out.T_ct_ref.emplace(tag_id, est_ref.candidates[best_i_ref].T_ct);
-        out.T_ct_cur.emplace(tag_id, est_cur.candidates[best_i_cur].T_ct);
+        out.T_ct_ref.emplace(tag_id, est_ref.candidates[best_i_ref].t_ct);
+        out.T_ct_cur.emplace(tag_id, est_cur.candidates[best_i_cur].t_ct);
     }
 
     out.valid = !out.T_ct_ref.empty();
@@ -434,16 +434,16 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
 {
     constexpr std::size_t kMinUnambiguousTagsForSingleFrame = 3;
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] TryInitializeSingleFrame running"
                   << " (frame_id=" << frame.mnId << ")" << std::endl;
 
     LogFrameTagAmbiguityRatios(frame, "init_single");
 
-    // 收集无歧义的有效观测
+    // Collect unambiguous valid observations
     const UnambiguousObsMap unambiguous = CollectUnambiguousObservations(frame);
 
-    if(mbVerbose)
+    if(verbose_)
     {
         std::cout << "[TagInitializer] unambiguous valid observations: "
                   << unambiguous.size()
@@ -460,68 +460,68 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
         std::cout << "]" << std::endl;
     }
 
-    // 无歧义观测数不足
+    // Too few unambiguous observations
     if(unambiguous.size() < kMinUnambiguousTagsForSingleFrame)
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] TryInitializeSingleFrame failed"
                       << " (insufficient unambiguous observations)" << std::endl;
         return false;
     }
 
-    // Tag world := first_frame 左目相机系 => Tcw = I
-    // T_wt = T_cL_t；右目观测先经 T_lr 转到左目
+    // Tag world := left-camera frame of first_frame => Tcw = I
+    // T_wt = T_cL_t; a right-camera observation is transformed to the left camera by T_lr first
     Result out;
     out.Tcw_current = {Sophus::SE3f()};
     out.from_single_frame = true;
 
     const Sophus::SE3f T_lr = frame.GetRelativePoseTlr();
 
-    // 遍历无歧义观测，构建 Tag 初始化结果并写入观测（统一用 Frame::mnId）
+    // Walk the unambiguous observations, build the Tag init result, and store the observations (always use Frame::mnId)
     for(const auto &kv : unambiguous)
     {
         const int tag_id = kv.first;
         const TagObservation &obs = *kv.second;
-        const Sophus::SE3f &T_ct = obs.pose_estimate->Selected()->T_ct;
+        const Sophus::SE3f &T_ct = obs.pose_estimate->GetSelectedCandidate()->t_ct;
         const Sophus::SE3f T_wt =
-            ExpressTagPoseInLeftCamera(obs.camera_id, T_ct, T_lr);
+            ConvertTagPoseToLeftCamera(obs.camera_id, T_ct, T_lr);
 
         MapTagPtr map_tag = std::make_shared<MapTagData>();
         map_tag->SetId(tag_id);
         map_tag->SetTagSize(static_cast<float>(GetTagSize(tag_id)));
         map_tag->SetPose(T_wt);
-        if(const TagPoseCandidate *mir = obs.pose_estimate->Unselected())
+        if(const TagPoseCandidate *mir = obs.pose_estimate->GetUnselectedCandidate())
         {
             map_tag->SetMirrorPose(
-                ExpressTagPoseInLeftCamera(obs.camera_id, mir->T_ct, T_lr));
+                ConvertTagPoseToLeftCamera(obs.camera_id, mir->t_ct, T_lr));
         }
-        // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
+        // World pose estimated by the system: ACTIVE (later LBA may optimize it). FIXED_ANCHOR is reserved for an external trusted Tag map.
         map_tag->SetState(MapTagState::ACTIVE);
-        // 观测角点留在 Frame/KeyFrame::mTagFrameData；不向 MapTag 复制
+        // Observation corners stay in Frame/KeyFrame::tag_frame_data_; they are not copied onto the MapTag
 
         out.tags.emplace(tag_id, std::move(map_tag));
     }
 
-    // 先注册 first_frame；second_frame 由 CompleteSingleFrameInitWithSecondFrame 追加
+    // Register first_frame first; second_frame is appended by CompleteSingleFrameInitializationWithSecondFrame
     Frame kf = frame;
     kf.SetPose(out.Tcw_current.front());
     out.keyframes.push_back(std::move(kf));
 
     result = std::move(out);
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] TryInitializeSingleFrame succeeded"
                   << " (tags=" << result.tags.size() << ")" << std::endl;
 
     return true;
 }
 
-bool TagInitializer::CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
+bool TagInitializer::CompleteSingleFrameInitializationWithSecondFrame(Frame &first_frame,
                                                             Frame &second_frame,
                                                             Result &result)
 {
-    if(mbVerbose)
-        std::cout << "[TagInitializer] CompleteSingleFrameInitWithSecondFrame"
+    if(verbose_)
+        std::cout << "[TagInitializer] CompleteSingleFrameInitializationWithSecondFrame"
                   << " (second_frame_id=" << second_frame.mnId << ")" << std::endl;
 
     if(result.tags.empty() || result.Tcw_current.empty() || result.keyframes.empty())
@@ -534,18 +534,18 @@ bool TagInitializer::CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
     }
 
     Sophus::SE3f Tcw_second;
-    if(!TagOptimizer::PoseOptimizationForSecondFrame(
-           second_frame, result.tags, Tcw_second, std::nullopt, mbVerbose))
+    if(!TagOptimizer::OptimizePoseForSecondFrame(
+           second_frame, result.tags, Tcw_second, std::nullopt, verbose_))
     {
-        if(mbVerbose)
-            std::cout << "[TagInitializer] CompleteSingleFrameInitWithSecondFrame failed"
+        if(verbose_)
+            std::cout << "[TagInitializer] CompleteSingleFrameInitializationWithSecondFrame failed"
                       << " (second-frame motion-only BA failed)" << std::endl;
         return false;
     }
 
-    // 观测留在 second_frame.mTagFrameData；冻结路径不向 MapTagData 复制
+    // Observations stay in second_frame.tag_frame_data_; the frozen path does not copy them into MapTagData
 
-    // 与双帧初始化一致：Tcw_current / keyframes 均为两帧
+    // Same as two-frame init: both Tcw_current and keyframes hold two frames
     result.Tcw_current = {Sophus::SE3f(), Tcw_second};
     result.keyframes.clear();
 
@@ -556,8 +556,8 @@ bool TagInitializer::CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
     result.keyframes.push_back(std::move(kf_ref));
     result.keyframes.push_back(std::move(kf_cur));
 
-    if(mbVerbose)
-        std::cout << "[TagInitializer] CompleteSingleFrameInitWithSecondFrame succeeded"
+    if(verbose_)
+        std::cout << "[TagInitializer] CompleteSingleFrameInitializationWithSecondFrame succeeded"
                   << " (keyframes=" << result.keyframes.size() << ")" << std::endl;
 
     return true;
@@ -567,7 +567,7 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
                                             const CommonTagObsMap &common_obs,
                                             Result &result)
 {
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] TryInitializeTwoFrames running"
                   << " (frame_id=" << frame.mnId
                   << ", ref_frame_id=" << ref_frame.mnId
@@ -576,19 +576,19 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
     LogFrameTagAmbiguityRatios(ref_frame, "init_two_ref");
     LogFrameTagAmbiguityRatios(frame, "init_two_cur");
 
-    // 共同观测去畸变角点的平均像素位移
+    // Mean pixel shift of the undistorted corners of the shared observations
     const float mean_pixel_disp = ComputeMeanCornerPixelDisplacement(common_obs);
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] mean corner pixel displacement: "
                   << mean_pixel_disp << " px" << std::endl;
 
-    // 视差过小则双帧初始化失败（相对图像宽度）
+    // Two-frame init fails when parallax is too small (relative to image width)
     const float image_width = Frame::mnMaxX - Frame::mnMinX;
     const float min_pixel_disp = kMinMeanPixelDispRatio * image_width;
     if(image_width <= 0.0f || mean_pixel_disp < min_pixel_disp)
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] TryInitializeTwoFrames failed"
                       << " (insufficient parallax"
                       << ", mean_pixel_disp=" << mean_pixel_disp
@@ -607,12 +607,12 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
     if(!ResolveTwoViewIppeAmbiguity(common_obs, pCamera, ambiguity))
         return false;
 
-    // Tag world := first_frame（ref）相机系；位姿序列 {I, T_21}
+    // Tag world := camera frame of first_frame (ref); pose sequence {I, T_21}
     Result out;
     out.Tcw_current = {Sophus::SE3f(), ambiguity.T_21};
     out.from_single_frame = false;
 
-    // 遍历消歧后的 Tag->Camera 位姿，写入初始化结果（统一用 Frame::mnId）
+    // Walk the disambiguated Tag->Camera poses and write the init result (always use Frame::mnId)
     for(const auto &kv : ambiguity.T_ct_ref)
     {
         const int tag_id = kv.first;
@@ -625,7 +625,7 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
         if(cur_pose_it == ambiguity.T_ct_cur.end())
             continue;
 
-        // 获取消歧后指定Tag的参考帧/当前帧 IPPE 下标
+        // IPPE indices of the reference frame and the current frame for the given Tag after disambiguation
         const auto sel_ref_it = ambiguity.selected_ref_candidate.find(tag_id);
         const auto sel_cur_it = ambiguity.selected_cur_candidate.find(tag_id);
         if(sel_ref_it == ambiguity.selected_ref_candidate.end() ||
@@ -637,22 +637,22 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
         const Sophus::SE3f &T_c1t = kv.second;
         const Sophus::SE3f &T_c2t = cur_pose_it->second;
 
-        // 回写到 Frame.mTagFrameData：仅更新 selected_candidate 与所选候选解
-        ref_frame.mTagFrameData.WriteBackSelectedCandidate(
+        // Write back into Frame.tag_frame_data_: update only selected_candidate and the selected candidate solution
+        ref_frame.tag_frame_data_.WriteBackSelectedCandidate(
             tag_id, common_it->second.ref->camera_id, i_ref, &T_c1t);
-        frame.mTagFrameData.WriteBackSelectedCandidate(
+        frame.tag_frame_data_.WriteBackSelectedCandidate(
             tag_id, common_it->second.cur->camera_id, i_cur, &T_c2t);
 
-        // 从回写后的 Frame 取观测，注册到 MapTagData
+        // Take the observation from the Frame after write-back and register it on MapTagData
         const TagObservation *obs_ref_ptr =
-            ref_frame.mTagFrameData.Find(tag_id, common_it->second.ref->camera_id);
+            ref_frame.tag_frame_data_.Find(tag_id, common_it->second.ref->camera_id);
         const TagObservation *obs_cur_ptr =
-            frame.mTagFrameData.Find(tag_id, common_it->second.cur->camera_id);
+            frame.tag_frame_data_.Find(tag_id, common_it->second.cur->camera_id);
         if(!obs_ref_ptr || !obs_cur_ptr)
             continue;
 
-        // world := ref 左目；右目 IPPE 先转到左目再写 T_wt
-        const Sophus::SE3f T_wt = ExpressTagPoseInLeftCamera(
+        // world := left camera of ref; right-camera IPPE is transformed to the left camera before T_wt is written
+        const Sophus::SE3f T_wt = ConvertTagPoseToLeftCamera(
             obs_ref_ptr->camera_id, T_c1t, ref_frame.GetRelativePoseTlr());
 
         MapTagPtr map_tag = std::make_shared<MapTagData>();
@@ -661,14 +661,14 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
         map_tag->SetPose(T_wt);
         if(obs_ref_ptr->pose_estimate.has_value())
         {
-            if(const TagPoseCandidate *mir = obs_ref_ptr->pose_estimate->Unselected())
+            if(const TagPoseCandidate *mir = obs_ref_ptr->pose_estimate->GetUnselectedCandidate())
             {
-                map_tag->SetMirrorPose(ExpressTagPoseInLeftCamera(
-                    obs_ref_ptr->camera_id, mir->T_ct,
+                map_tag->SetMirrorPose(ConvertTagPoseToLeftCamera(
+                    obs_ref_ptr->camera_id, mir->t_ct,
                     ref_frame.GetRelativePoseTlr()));
             }
         }
-        // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
+        // World pose estimated by the system: ACTIVE (later LBA may optimize it). FIXED_ANCHOR is reserved for an external trusted Tag map.
         map_tag->SetState(MapTagState::ACTIVE);
         out.tags.emplace(tag_id, std::move(map_tag));
     }
@@ -676,8 +676,8 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
     if(out.tags.empty())
         return false;
 
-    // 参考帧 (Tcw=I) + 当前帧 (Tcw=T_21)，供后续真实 KF 提交使用
-    // 此时 Frame.mTagFrameData 中对应 Tag 的 selected_candidate 已回写
+    // Reference frame (Tcw=I) + current frame (Tcw=T_21), for the later commit of the real KF
+    // selected_candidate of the matching Tag in Frame.tag_frame_data_ has already been written back
     Frame kf_ref = ref_frame;
     kf_ref.SetPose(out.Tcw_current[0]);
     Frame kf_cur = frame;
@@ -690,24 +690,24 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
 }
 
 bool TagInitializer::TryInitialize(Frame &first_frame, Frame &second_frame,
-                                   Result &result, InitMode mode)
+                                   Result &result, InitializationMode mode)
 {
     // ---------- Stereo ----------
-    // 双目：米制尺度已具备，仅单帧建图（忽略 second_frame）
-    if(mode == InitMode::Stereo)
+    // Stereo: metric scale is already available, so map from a single frame only (ignore second_frame)
+    if(mode == InitializationMode::Stereo)
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] TryInitialize Stereo"
                       << " (frame_id=" << first_frame.mnId << ")" << std::endl;
         return TryInitializeSingleFrame(first_frame, result);
     }
 
     // ---------- Monocular ----------
-    // 0) 先检查 ORB 初始化两帧共视 Tag；不足则整次初始化失败
+    // 0) First check the covisible Tag set on the two ORB-init frames; if there are too few, the whole initialization fails
     const CommonTagObsMap common_obs =
         FindCommonTagObservations(second_frame, first_frame);
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] common tag observations: "
                   << common_obs.size()
                   << " (need >= " << kMinCommonTagsForTwoFrame << ")"
@@ -715,24 +715,24 @@ bool TagInitializer::TryInitialize(Frame &first_frame, Frame &second_frame,
 
     if(common_obs.size() < kMinCommonTagsForTwoFrame)
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] TryInitialize failed"
                       << " (insufficient common tags between ORB init frames)"
                       << std::endl;
         return false;
     }
 
-    // 1) 单帧建图 + motion-only 估计第二帧（内部用 Result::tags 世界角点作临时锚点）
+    // 1) Single-frame mapping + motion-only estimate of the second frame (Result::tags world corners are temporary anchors inside)
     if(TryInitializeSingleFrame(first_frame, result))
     {
-        if(CompleteSingleFrameInitWithSecondFrame(first_frame, second_frame, result))
+        if(CompleteSingleFrameInitializationWithSecondFrame(first_frame, second_frame, result))
             return true;
 
-        // 第二帧位姿失败：清空部分结果，回退双帧联合初始化
+        // Second-frame pose failed: clear the partial result and fall back to joint two-frame init
         result = Result{};
     }
 
-    // 2) 复用已计算的共视，做双帧联合初始化
+    // 2) Reuse the covisibility already computed and run joint two-frame init
     return TryInitializeTwoFrames(second_frame, first_frame, common_obs, result);
 }
 
@@ -748,7 +748,7 @@ bool TagInitializer::AlignResultToOrbWorld(Result &result,
         if(!kv.second || !kv.second->HasPose())
             return false;
 
-        // TryInitializeSingleFrame 写入的是 T_ct（Tag world := 当前左相机）
+        // TryInitializeSingleFrame wrote T_ct (Tag world := current left camera)
         const Sophus::SE3f T_ct = kv.second->GetPose();
         kv.second->SetPose(Twc_orb * T_ct);
         if(kv.second->HasMirrorPose())
@@ -760,7 +760,7 @@ bool TagInitializer::AlignResultToOrbWorld(Result &result,
 
     result.Tcw_current = {Tcw_orb};
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] AlignResultToOrbWorld succeeded"
                   << " tags=" << result.tags.size() << std::endl;
 
@@ -782,14 +782,14 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
         pMap->SetTagInitialized(false);
     };
 
-    // 1) Map 拥有 MapTag
+    // 1) The Map owns the MapTag
     for(const auto &kv : result.tags)
     {
         if(!kv.second)
             continue;
         if(!pMap->AddMapTag(kv.second))
         {
-            if(mbVerbose)
+            if(verbose_)
                 std::cout << "[TagInitializer] CommitTagInitialization failed"
                           << " AddMapTag tag_id=" << kv.first << std::endl;
             rollback();
@@ -798,7 +798,7 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
         inserted_tag_ids.push_back(kv.first);
     }
 
-    // 2) KeyFrame ↔ MapTag 双向关联（索引来自 KF.mTagFrameData）
+    // 2) Bidirectional KeyFrame <-> MapTag association (indices come from KF.tag_frame_data_)
     for(KeyFrame *pKF : vpKFs)
     {
         if(!pKF || pKF->GetMap() != pMap)
@@ -813,17 +813,17 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
 
             int left_idx = -1;
             int right_idx = -1;
-            for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.left.size()); ++i)
+            for(int i = 0; i < static_cast<int>(pKF->tag_frame_data_.left_.size()); ++i)
             {
-                if(pKF->mTagFrameData.left[i].tag_id == tag_id)
+                if(pKF->tag_frame_data_.left_[i].tag_id == tag_id)
                 {
                     left_idx = i;
                     break;
                 }
             }
-            for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.right.size()); ++i)
+            for(int i = 0; i < static_cast<int>(pKF->tag_frame_data_.right_.size()); ++i)
             {
-                if(pKF->mTagFrameData.right[i].tag_id == tag_id)
+                if(pKF->tag_frame_data_.right_[i].tag_id == tag_id)
                 {
                     right_idx = i;
                     break;
@@ -835,7 +835,7 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
 
             if(!pKF->AddMapTag(pTag, left_idx, right_idx))
             {
-                if(mbVerbose)
+                if(verbose_)
                     std::cout << "[TagInitializer] CommitTagInitialization failed"
                               << " KF AddMapTag tag_id=" << tag_id
                               << " kf_id=" << pKF->mnId << std::endl;
@@ -848,7 +848,7 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
     std::string check_err;
     if(!pMap->CheckMapTagAssociations(&check_err))
     {
-        if(mbVerbose)
+        if(verbose_)
             std::cout << "[TagInitializer] CommitTagInitialization consistency failed: "
                       << check_err << std::endl;
         rollback();
@@ -857,7 +857,7 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
 
     pMap->SetTagInitialized(true);
 
-    if(mbVerbose)
+    if(verbose_)
         std::cout << "[TagInitializer] CommitTagInitialization succeeded"
                   << " tags=" << result.tags.size()
                   << " kfs=" << vpKFs.size() << std::endl;
@@ -865,5 +865,5 @@ bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
     return true;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

@@ -879,9 +879,9 @@ public:
     int cam_idx = 0;
 };
 
-// 固定世界角点 → 当前 KF 4DoF 位姿的 unary 边（只优化 yaw+xyz）。
-// e = u - π_cam(Xw)；世界点由冻结历史 T_wt 生成，不优化 Tag。
-// 第一版使用 g2o 数值 Jacobian。
+// Unary edge from a fixed world corner to the current KF 4DoF pose (optimize yaw+xyz only).
+// e = u - π_cam(Xw); the world point is generated from the frozen historical T_wt, and the Tag is not optimized.
+// The first version uses the g2o numeric Jacobian.
 class EdgeTagCornerPose4DoF : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, VertexPose4DoF>
 {
 public:
@@ -914,7 +914,7 @@ public:
     int cam_idx = 0;
 };
 
-bool TestTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
+bool CheckTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
 
 } //namespace ORB_SLAM2
 

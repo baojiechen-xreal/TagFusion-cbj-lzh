@@ -215,8 +215,8 @@ public:
 
 };
 
-// Tag 刚体位姿 + KF 位姿：e = u - π(T_cw * T_wt * P_t)
-// vertex 0: T_wt，vertex 1: T_cw
+// Tag rigid pose + KF pose: e = u - π(T_cw * T_wt * P_t)
+// vertex 0: T_wt, vertex 1: T_cw
 class EdgeSE3ProjectTagCorner : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
 {
 public:
@@ -248,14 +248,14 @@ public:
 
     virtual void linearizeOplus();
 
-    // 与解析 Jacobian 做中心差分对比；成功返回 true
+    // Compare with the analytic Jacobian using central differences; return true on success
     bool checkJacobiansNumerical(double delta = 1e-8, double tol = 1e-5) const;
 
-    Eigen::Vector3d X_t;  // Tag 坐标系角点
+    Eigen::Vector3d X_t;  // corner in the Tag frame
     GeometricCamera *pCamera = nullptr;
 };
 
-// 右目：e = u - π(T_rl * T_cw * T_wt * P_t)
+// Right camera: e = u - π(T_rl * T_cw * T_wt * P_t)
 class EdgeSE3ProjectTagCornerToBody : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
 {
 public:
@@ -295,8 +295,8 @@ public:
     g2o::SE3Quat mTrl;
 };
 
-// 合成场景下校验 Tag 角点边解析 Jacobian（供单测 / 调试调用）
-bool TestTagCornerEdgeJacobians(double *max_abs_err = nullptr);
+// Check the analytic Jacobian of Tag corner edges on a synthetic scene (for unit tests / debug)
+bool CheckTagCornerEdgeJacobians(double *max_abs_err = nullptr);
 
 }
 

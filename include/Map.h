@@ -44,7 +44,7 @@ class KeyFrame;
 class Atlas;
 class KeyFrameDatabase;
 
-namespace tag {
+namespace xreal_tag {
 class MapTagData;
 }
 
@@ -91,8 +91,8 @@ public:
     void InformNewBigChange();
     int GetLastBigChangeIdx();
 
-    // MapTag 容器：Map 为 shared_ptr 唯一持久化所有者（KF 仅持裸指针）
-    using MapTagPtr = std::shared_ptr<tag::MapTagData>;
+    // MapTag container: Map is the unique persistent owner of the shared_ptr (a KF holds only a raw pointer)
+    using MapTagPtr = std::shared_ptr<xreal_tag::MapTagData>;
     using MapTagContainer = std::unordered_map<int, MapTagPtr>;
 
     bool AddMapTag(const MapTagPtr &pTag);
@@ -103,11 +103,11 @@ public:
     bool HasMapTag(int tagId) const;
     std::size_t MapTagsInMap() const;
 
-    // Tag 米制初始化是否已成功提交（不等同于 MapTagsInMap()>0）
+    // Whether Tag metric initialization has been committed (not the same as MapTagsInMap()>0)
     bool IsTagInitialized() const;
     void SetTagInitialized(bool initialized);
 
-    // KeyFrame ↔ MapTag 双向关联一致性检查（仅用公开接口）
+    // Keyframe <-> MapTag two-way association consistency check (public interface only)
     bool CheckMapTagAssociations(std::string *error = nullptr) const;
 
     std::vector<KeyFrame*> GetAllKeyFrames();
@@ -192,7 +192,7 @@ protected:
     std::set<KeyFrame*> mspKeyFrames;
 
     MapTagContainer mMapTags;
-    bool mbTagInitialized = false;
+    bool tag_initialized_ = false;
 
     // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
     std::vector<MapPoint*> mvpBackupMapPoints;
@@ -230,7 +230,7 @@ protected:
     bool mbIMU_BA1;
     bool mbIMU_BA2;
 
-    // Mutex（const 查询接口也需加锁）
+    // Mutex (const query interfaces must lock too)
     mutable std::mutex mMutexMap;
 
 };

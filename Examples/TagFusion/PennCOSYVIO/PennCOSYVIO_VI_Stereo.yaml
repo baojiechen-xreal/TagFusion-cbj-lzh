@@ -2,19 +2,19 @@
 
 #--------------------------------------------------------------------------------------------
 # PennCOSYVIO VI-Sensor stereo, e.g. visensor/af|as|bf|bs
-# 官方说明：bag 中为 rectified 帧（尽管标定有瑕疵），故用 Rectified + Stereo.b，
-# 避免 PinHole+Camera2 触发二次 stereoRectify。
+# Official note: the bag stores rectified frames (calibration is imperfect), so use Rectified + Stereo.b
+# and avoid a second stereoRectify from PinHole+Camera2.
 # Intrinsics: https://daniilidis-group.github.io/penncosyvio/intrinsic_calib/
 # Baseline ~0.1104 m from T_B_VL / T_B_VR
 # Image: 752 x 480, ~20 FPS
-# 若跟踪/消歧很差，可改用官方 Kalibr 左右目标定：
+# If tracking or disambiguation is poor, switch to the official Kalibr left-right target calibration:
 #   https://daniilidis-group.github.io/penncosyvio/extrinsic_calib/
 #--------------------------------------------------------------------------------------------
 File.version: "1.0"
 
 Camera.type: "Rectified"
 
-# 左目内参；矫正后左右共用（右目仅作 Tag IPPE / 显示）
+# Left intrinsics; shared by both eyes after rectification (right is only for Tag IPPE / display)
 Camera1.fx: 445.80
 Camera1.fy: 445.15
 Camera1.cx: 371.50
@@ -36,7 +36,7 @@ Camera.RGB: 1
 
 # Close/Far threshold. Baseline times.
 Stereo.ThDepth: 40.0
-# 基线（米）；bf = fx * b ≈ 49.21
+# Baseline (m); bf = fx * b ≈ 49.21
 Stereo.b: 0.110384686
 
 #--------------------------------------------------------------------------------------------
@@ -88,8 +88,8 @@ Tag.save_vis: 0
 Tag.save_vis_dir: "tag_vis"
 Tag.show_in_orb_viewer: 1
 
-# ========================== local BA配置 ==========================
-Tag.pose_optimization: 1   # 纯视觉 PoseOptimization 与惯性 PoseInertial* 共用（运行时只走当前传感器对应的一条分支）
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
 Tag.fixed_only: 1
@@ -99,30 +99,30 @@ Tag.local_ba.corner_sigma: 2.0
 Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1
 
-# ========================== 角点因子自适应权重配置 ==========================
+# ========================== adaptive corner-factor weights ==========================
 Tag.factor_weight.enable: 0
-Tag.factor_weight.alpha: 3.0          # Tag / feature 基础权重比
-Tag.factor_weight.s_sat: 400.0        # 基本满权面积 px^2
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
 Tag.factor_weight.lambda_s: 3.0
-Tag.factor_weight.theta0_deg: 60.0    # 视角特征尺度
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
 Tag.factor_weight.lambda_theta: 1.0
-Tag.factor_weight.phi0_deg: 15.0      # IPPE 双解显著旋转差
-Tag.factor_weight.e0: 1.0             # 双解 residual 区分尺度 px
-Tag.factor_weight.lambda_amb: 0.0         # 0=关闭双解项（w_amb≡1）
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
 Tag.factor_weight.w_min: 0.001
-Tag.factor_weight.verbose: 0          # 1=打印 S,θ,Δφ,Δe 与各分项权重
+Tag.factor_weight.verbose: 0          # 1=print S, theta, delta-phi, delta-e and per-term weights
 
-# ========================== 回环配置 ==========================
+# ========================== loop closure ==========================
 Tag.loop.enable: 1
 Tag.loop.min_history_observations: 2
-Tag.loop.min_keyframe_gap: 30 # 历史回环 KF 与当前 KF 的最小 ID 间隔
-Tag.loop.min_reobservation_gap_kfs: 30 # 最近一次有效观测间隔；过小视为连续可见，不是重新观察
-Tag.loop.min_historical_kf_map_points: 20 # 历史 KF 至少需有这么多跟踪地图点
-Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE解的重投影误差阈值
-Tag.loop.max_stereo_translation_error: 0.20 # 左右目当前相机位姿的位移差阈值
-Tag.loop.max_stereo_rotation_error: 0.20 # 左右目当前相机位姿旋转差阈值
-Tag.loop.max_roll_pitch_correction: 0.15 # Sim3修正的roll和pitch差阈值
-Tag.loop.max_yaw_correction: 1.57 # Sim3修正的yaw差阈值
-Tag.loop.min_consistent_tags: 1 # 至少需要多少个一致的Tag才能认为存在回环
-Tag.loop.reference_timeout_kfs: 4 # 连续若干 KF 未见该 Tag 则清除冻结回环参考
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.15 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
 Tag.loop.verbose: 1

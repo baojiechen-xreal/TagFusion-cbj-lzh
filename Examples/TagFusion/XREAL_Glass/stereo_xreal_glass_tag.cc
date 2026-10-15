@@ -160,8 +160,7 @@ void LoadImages(const string &seqPath,
 
         const string leftFile = leftPath + "/" + name;
         const string rightFile = rightPath + "/" + name;
-        if(!FileExists(leftFile) || !FileExists(rightFile))
-            continue;
+        // Do not stat each image while loading; a missing image is reported later by imread.
 
         vTimeStamps.push_back(t);
         vstrImageLeft.push_back(leftFile);

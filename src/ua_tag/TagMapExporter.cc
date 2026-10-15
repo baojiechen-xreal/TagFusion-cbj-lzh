@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -100,14 +100,14 @@ void WeightRgb(float w_bar, bool valid, int &r, int &g, int &b)
 
 TagMapExporter::TagMapExporter(const std::string &output_dir,
                                TagFactorWeightParams factor_weight)
-    : mOutputDir(output_dir), mFactorWeight(std::move(factor_weight))
+    : output_dir_(output_dir), factor_weight_(std::move(factor_weight))
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return;
 
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
     {
-        std::cerr << "[TagMapExporter] failed to create dir: " << mOutputDir
+        std::cerr << "[TagMapExporter] failed to create dir: " << output_dir_
                   << std::endl;
         return;
     }
@@ -115,9 +115,9 @@ TagMapExporter::TagMapExporter(const std::string &output_dir,
     const bool traj_ok = OpenTrajectoryFile();
     const bool det_ok = OpenDetectionLogFile();
     const bool first_ok = OpenFirstRegistrationLogFile();
-    mbEnabled = traj_ok || det_ok || first_ok;
-    if(mbEnabled)
-        std::cout << "[TagMapExporter] export dir=" << mOutputDir << std::endl;
+    enabled_ = traj_ok || det_ok || first_ok;
+    if(enabled_)
+        std::cout << "[TagMapExporter] export dir=" << output_dir_ << std::endl;
 }
 
 TagMapExporter::~TagMapExporter()
@@ -127,29 +127,29 @@ TagMapExporter::~TagMapExporter()
 
 bool TagMapExporter::OpenTrajectoryFile()
 {
-    // TUM 轨迹：timestamp tx ty tz qx qy qz qw（Twc）
-    const std::string path = mOutputDir + "/tag_camera_trajectory.txt";
-    mTrajFile.open(path.c_str(), std::ios::out | std::ios::trunc);
-    if(!mTrajFile.is_open())
+    // TUM trajectory: timestamp tx ty tz qx qy qz qw (Twc)
+    const std::string path = output_dir_ + "/tag_camera_trajectory.txt";
+    trajectory_file_.open(path.c_str(), std::ios::out | std::ios::trunc);
+    if(!trajectory_file_.is_open())
     {
         std::cerr << "[TagMapExporter] failed to open: " << path << std::endl;
         return false;
     }
-    mTrajFile << std::fixed;
+    trajectory_file_ << std::fixed;
     return true;
 }
 
 bool TagMapExporter::OpenDetectionLogFile()
 {
-    const std::string path = mOutputDir + "/tag_detections.csv";
-    mDetFile.open(path.c_str(), std::ios::out | std::ios::trunc);
-    if(!mDetFile.is_open())
+    const std::string path = output_dir_ + "/tag_detections.csv";
+    detection_file_.open(path.c_str(), std::ios::out | std::ios::trunc);
+    if(!detection_file_.is_open())
     {
         std::cerr << "[TagMapExporter] failed to open: " << path << std::endl;
         return false;
     }
-    mDetFile << std::setprecision(9);
-    mDetFile << "frame_id,timestamp,camera,tag_id,"
+    detection_file_ << std::setprecision(9);
+    detection_file_ << "frame_id,timestamp,camera,tag_id,"
              << "observed_area,observed_perimeter,hamming,"
              << "cx,cy,"
              << "x0,y0,x1,y1,x2,y2,x3,y3\n";
@@ -158,14 +158,14 @@ bool TagMapExporter::OpenDetectionLogFile()
 
 bool TagMapExporter::OpenFirstRegistrationLogFile()
 {
-    const std::string path = mOutputDir + "/tag_first_registration.csv";
-    mFirstRegFile.open(path.c_str(), std::ios::out | std::ios::trunc);
-    if(!mFirstRegFile.is_open())
+    const std::string path = output_dir_ + "/tag_first_registration.csv";
+    first_registration_file_.open(path.c_str(), std::ios::out | std::ios::trunc);
+    if(!first_registration_file_.is_open())
     {
         std::cerr << "[TagMapExporter] failed to open: " << path << std::endl;
         return false;
     }
-    mFirstRegFile << "kf_id,frame_id,timestamp,tag_id,camera,"
+    first_registration_file_ << "kf_id,frame_id,timestamp,tag_id,camera,"
                   << "map_has_pose,pose_source,observed_area,distance_m,"
                   << "axis_plane_angle_deg,axis_normal_angle_deg,"
                   << "nx,ny,nz,tx,ty,tz\n";
@@ -177,14 +177,14 @@ void TagMapExporter::AppendCameraPose(unsigned long frame_id,
                                       const Sophus::SE3f &Tcw)
 {
     (void)frame_id;
-    if(!mbEnabled || !mTrajFile.is_open())
+    if(!enabled_ || !trajectory_file_.is_open())
         return;
 
     const Sophus::SE3f Twc = Tcw.inverse();
     const Eigen::Quaternionf q = Twc.unit_quaternion();
     const Eigen::Vector3f t = Twc.translation();
 
-    mTrajFile << std::setprecision(6) << timestamp << " "
+    trajectory_file_ << std::setprecision(6) << timestamp << " "
               << std::setprecision(9) << t.x() << " " << t.y() << " " << t.z() << " "
               << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
 }
@@ -193,7 +193,7 @@ void TagMapExporter::AppendTagDetections(unsigned long frame_id,
                                          double timestamp,
                                          const TagFrameData &frame_data)
 {
-    if(!mbEnabled || !mDetFile.is_open() || frame_data.Empty())
+    if(!enabled_ || !detection_file_.is_open() || frame_data.IsEmpty())
         return;
 
     auto write_obs = [&](const TagObservation &obs, const char *cam) {
@@ -210,7 +210,7 @@ void TagMapExporter::AppendTagDetections(unsigned long frame_id,
         cx *= 0.25f;
         cy *= 0.25f;
 
-        mDetFile << frame_id << ","
+        detection_file_ << frame_id << ","
                  << std::setprecision(6) << timestamp << ","
                  << cam << ","
                  << obs.tag_id << ","
@@ -219,13 +219,13 @@ void TagMapExporter::AppendTagDetections(unsigned long frame_id,
                  << obs.hamming << ","
                  << cx << "," << cy;
         for(const cv::Point2f &p : obs.corners_raw)
-            mDetFile << "," << p.x << "," << p.y;
-        mDetFile << "\n";
+            detection_file_ << "," << p.x << "," << p.y;
+        detection_file_ << "\n";
     };
 
-    for(const TagObservation &obs : frame_data.left)
+    for(const TagObservation &obs : frame_data.left_)
         write_obs(obs, "left");
-    for(const TagObservation &obs : frame_data.right)
+    for(const TagObservation &obs : frame_data.right_)
         write_obs(obs, "right");
 }
 
@@ -235,7 +235,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
                                                    int right_idx,
                                                    MapTagData *pTag)
 {
-    if(!mbEnabled || !mFirstRegFile.is_open() || !pKF || tag_id < 0)
+    if(!enabled_ || !first_registration_file_.is_open() || !pKF || tag_id < 0)
         return;
 
     const Sophus::SE3f Tcw = pKF->GetPose();
@@ -245,9 +245,9 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
 
     auto resolve_Tct = [&](const TagObservation &obs, bool is_right,
                            Sophus::SE3f &T_ct, const char *&pose_source) -> bool {
-        if(obs.pose_estimate.has_value() && obs.pose_estimate->Selected())
+        if(obs.pose_estimate.has_value() && obs.pose_estimate->GetSelectedCandidate())
         {
-            T_ct = obs.pose_estimate->Selected()->T_ct;
+            T_ct = obs.pose_estimate->GetSelectedCandidate()->t_ct;
             pose_source = "selected";
             return true;
         }
@@ -269,7 +269,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
             }
             if(best >= 0)
             {
-                T_ct = obs.pose_estimate->candidates[best].T_ct;
+                T_ct = obs.pose_estimate->candidates[best].t_ct;
                 pose_source = "best_ippe";
                 return true;
             }
@@ -296,7 +296,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
         const char *pose_source = "none";
         const bool have_T = resolve_Tct(obs, is_right, T_ct, pose_source);
 
-        mFirstRegFile << pKF->mnId << ","
+        first_registration_file_ << pKF->mnId << ","
                       << pKF->mnFrameId << ","
                       << std::setprecision(6) << pKF->mTimeStamp << ","
                       << tag_id << ","
@@ -313,7 +313,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
             const float n_norm = n.norm();
             if(n_norm < 1e-8f)
             {
-                mFirstRegFile << ",,,,,,,,\n";
+                first_registration_file_ << ",,,,,,,,\n";
                 return;
             }
             n /= n_norm;
@@ -322,7 +322,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
             const float axis_normal_deg = std::acos(abs_cos) * kRad2Deg;
             const float distance_m = t.norm();
 
-            mFirstRegFile << std::setprecision(6) << distance_m << ","
+            first_registration_file_ << std::setprecision(6) << distance_m << ","
                           << axis_plane_deg << ","
                           << axis_normal_deg << ","
                           << n.x() << "," << n.y() << "," << n.z() << ","
@@ -340,7 +340,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
         }
         else
         {
-            mFirstRegFile << ",,,,,,,,\n";
+            first_registration_file_ << ",,,,,,,,\n";
             std::cout << "[TagFirstReg] tag_id=" << tag_id
                       << " cam=" << cam
                       << " kf_id=" << pKF->mnId
@@ -351,18 +351,18 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
     };
 
     if(left_idx >= 0 &&
-       left_idx < static_cast<int>(pKF->mTagFrameData.left.size()))
-        write_one(pKF->mTagFrameData.left[left_idx], "left", false);
+       left_idx < static_cast<int>(pKF->tag_frame_data_.left_.size()))
+        write_one(pKF->tag_frame_data_.left_[left_idx], "left", false);
     if(right_idx >= 0 &&
-       right_idx < static_cast<int>(pKF->mTagFrameData.right.size()))
-        write_one(pKF->mTagFrameData.right[right_idx], "right", true);
+       right_idx < static_cast<int>(pKF->tag_frame_data_.right_.size()))
+        write_one(pKF->tag_frame_data_.right_[right_idx], "right", true);
 
-    mFirstRegFile.flush();
+    first_registration_file_.flush();
 }
 
 void TagMapExporter::LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF)
 {
-    if(!mbEnabled || !mFirstRegFile.is_open() || !pKF)
+    if(!enabled_ || !first_registration_file_.is_open() || !pKF)
         return;
 
     const auto associations = pKF->GetMapTagAssociations();
@@ -386,13 +386,13 @@ bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
 bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
                                         bool mirror, bool verbose) const
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return false;
 
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
         return false;
 
-    const std::string path = mOutputDir + "/" + filename;
+    const std::string path = output_dir_ + "/" + filename;
     std::ofstream ofs(path.c_str(), std::ios::out | std::ios::trunc);
     if(!ofs.is_open())
     {
@@ -410,14 +410,14 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         << "mean_w_bar,min_w_bar,max_w_bar,mean_alpha_w\n";
 
     std::vector<Map::MapTagPtr> tags = map.GetAllMapTags();
-    // 按 tag_id 排序，便于对比
+    // Sort by tag_id so results are easy to compare
     std::sort(tags.begin(), tags.end(),
               [](const Map::MapTagPtr &a, const Map::MapTagPtr &b) {
                   if(!a)
                       return true;
                   if(!b)
                       return false;
-                  return a->Id() < b->Id();
+                  return a->GetId() < b->GetId();
               });
 
     auto write_weight_fields = [&](const TagFactorWeightSummary &w) {
@@ -447,7 +447,7 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
 
         const bool has_corners = mirror ? map_tag->HasMirrorWorldCorners()
                                         : map_tag->HasWorldCorners();
-        ofs << map_tag->Id() << ","
+        ofs << map_tag->GetId() << ","
             << (map_tag->IsFixed() ? 1 : 0) << ","
             << (has_corners ? 1 : 0);
 
@@ -465,8 +465,8 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         }
 
         TagFactorWeightSummary w =
-            SummarizeMapTagFactorWeight(*map_tag, mFactorWeight);
-        // KF 剔除会清掉 MapTag 观测，但位姿仍在。保留上次有效汇总，避免最终 CSV 变成 n/a。
+            SummarizeMapTagFactorWeight(*map_tag, factor_weight_);
+        // KF culling clears MapTag observations, but the pose remains. Keep the last valid summary so the final CSV does not become n/a.
         if(w.valid)
         {
             map_tag->SetFactorVizWeight(ToVizWeight(w));
@@ -482,7 +482,7 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         ofs << "\n";
 
         if(!mirror && w.valid)
-            weight_rows.emplace_back(map_tag->Id(), w);
+            weight_rows.emplace_back(map_tag->GetId(), w);
     }
 
     ofs.close();
@@ -503,7 +503,7 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
                       << "(same formula as [TagW], mean over detect-valid KF obs; "
                       << "sorted by mean_w_bar, low=suppressed; "
                       << "applied_in_ba="
-                      << (mFactorWeight.enable ? 1 : 0) << "):\n";
+                      << (factor_weight_.enable ? 1 : 0) << "):\n";
             for(const auto &row : weight_rows)
             {
                 const TagFactorWeightSummary &w = row.second;
@@ -531,13 +531,13 @@ bool TagMapExporter::SaveTagInitKeyFrames(Map &map) const
 bool TagMapExporter::WriteKeyFramesTum(Map &map, const std::string &filename,
                                        bool tag_associated_only, bool verbose) const
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return false;
 
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
         return false;
 
-    const std::string path = mOutputDir + "/" + filename;
+    const std::string path = output_dir_ + "/" + filename;
     std::ofstream ofs(path.c_str(), std::ios::out | std::ios::trunc);
     if(!ofs.is_open())
     {
@@ -584,13 +584,13 @@ bool TagMapExporter::SaveOrbInitMap(
     const std::vector<Eigen::Vector3f> &points,
     const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw) const
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return false;
 
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
         return false;
 
-    const std::string pts_path = mOutputDir + "/orb_init_map_points.csv";
+    const std::string pts_path = output_dir_ + "/orb_init_map_points.csv";
     {
         std::ofstream ofs(pts_path.c_str(), std::ios::out | std::ios::trunc);
         if(!ofs.is_open())
@@ -607,7 +607,7 @@ bool TagMapExporter::SaveOrbInitMap(
                   << " num_pts=" << points.size() << std::endl;
     }
 
-    const std::string kf_path = mOutputDir + "/orb_init_keyframes_tum.txt";
+    const std::string kf_path = output_dir_ + "/orb_init_keyframes_tum.txt";
     {
         std::ofstream ofs(kf_path.c_str(), std::ios::out | std::ios::trunc);
         if(!ofs.is_open())
@@ -637,12 +637,12 @@ bool TagMapExporter::SaveOrbInitMap(
 bool TagMapExporter::WriteOrbPointsCsv(const std::vector<Eigen::Vector3f> &points,
                                        const std::string &filename, bool verbose) const
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return false;
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
         return false;
 
-    const std::string path = mOutputDir + "/" + filename;
+    const std::string path = output_dir_ + "/" + filename;
     std::ofstream ofs(path.c_str(), std::ios::out | std::ios::trunc);
     if(!ofs.is_open())
     {
@@ -664,12 +664,12 @@ bool TagMapExporter::WriteFinalMapPly(Map &map,
                                       const std::vector<Eigen::Vector3f> &orb_points,
                                       bool verbose) const
 {
-    if(mOutputDir.empty())
+    if(output_dir_.empty())
         return false;
-    if(!EnsureDir(mOutputDir))
+    if(!EnsureDir(output_dir_))
         return false;
 
-    const std::string path = mOutputDir + "/final_map.ply";
+    const std::string path = output_dir_ + "/final_map.ply";
     std::vector<std::array<float, 6>> verts;
     std::vector<std::array<int, 4>> faces;
     verts.reserve(orb_points.size() + 64);
@@ -679,7 +679,7 @@ bool TagMapExporter::WriteFinalMapPly(Map &map,
         const int base = static_cast<int>(verts.size());
         for(int i = 0; i < 4; ++i)
             verts.push_back({c[i].x(), c[i].y(), c[i].z(), r, g, b});
-        // Tag 局部：0=(-h,h), 1=(h,h), 2=(h,-h), 3=(-h,-h)
+        // Tag-local corners: 0=(-h,h), 1=(h,h), 2=(h,-h), 3=(-h,-h)
         faces.push_back({base, base + 1, base + 2, base + 3});
     };
 
@@ -801,20 +801,20 @@ bool TagMapExporter::SaveFinalMap(Map &map, bool verbose) const
 
 void TagMapExporter::CloseTrajectory()
 {
-    if(mTrajFile.is_open())
+    if(trajectory_file_.is_open())
     {
-        mTrajFile.flush();
-        mTrajFile.close();
+        trajectory_file_.flush();
+        trajectory_file_.close();
     }
-    if(mDetFile.is_open())
+    if(detection_file_.is_open())
     {
-        mDetFile.flush();
-        mDetFile.close();
+        detection_file_.flush();
+        detection_file_.close();
     }
-    if(mFirstRegFile.is_open())
+    if(first_registration_file_.is_open())
     {
-        mFirstRegFile.flush();
-        mFirstRegFile.close();
+        first_registration_file_.flush();
+        first_registration_file_.close();
     }
 }
 
@@ -824,8 +824,8 @@ void TagMapExporter::ResetSession()
     const bool traj_ok = OpenTrajectoryFile();
     const bool det_ok = OpenDetectionLogFile();
     const bool first_ok = OpenFirstRegistrationLogFile();
-    mbEnabled = traj_ok || det_ok || first_ok;
+    enabled_ = traj_ok || det_ok || first_ok;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

@@ -15,7 +15,7 @@
 #include <opencv2/core.hpp>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 bool ModuleEnabledFromSettings(const std::string &settings_path)
 {
@@ -120,7 +120,7 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
     const TagPoseCandidate *pose_src = nullptr;
     if(obs.pose_estimate.has_value())
     {
-        pose_src = obs.pose_estimate->Selected();
+        pose_src = obs.pose_estimate->GetSelectedCandidate();
         if(!pose_src)
         {
             float best_err = std::numeric_limits<float>::infinity();
@@ -138,7 +138,7 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
     }
     if(pose_src)
     {
-        Eigen::Vector3f n = pose_src->T_ct.rotationMatrix().col(2);
+        Eigen::Vector3f n = pose_src->t_ct.rotationMatrix().col(2);
         const float n_norm = n.norm();
         if(n_norm > 1e-8f)
         {
@@ -158,8 +158,8 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
         const TagPoseCandidate &c1 = obs.pose_estimate->candidates[1];
         if(c0.valid && c1.valid)
         {
-            const Eigen::Matrix3f R1 = c0.T_ct.rotationMatrix();
-            const Eigen::Matrix3f R2 = c1.T_ct.rotationMatrix();
+            const Eigen::Matrix3f R1 = c0.t_ct.rotationMatrix();
+            const Eigen::Matrix3f R2 = c1.t_ct.rotationMatrix();
             const float tr = (R1.transpose() * R2).trace();
             const float c = std::min(1.0f, std::max(-1.0f, 0.5f * (tr - 1.0f)));
             w.dphi_rad = std::acos(c);
@@ -218,12 +218,12 @@ TagFactorWeightSummary SummarizeMapTagFactorWeight(
         if(!pKF || pKF->isBad())
             continue;
         const MapTagData::KeyFrameObservation &idx = kv.second;
-        if(idx.leftIndex >= 0 &&
-           idx.leftIndex < static_cast<int>(pKF->mTagFrameData.left.size()))
-            consider(&pKF->mTagFrameData.left[static_cast<std::size_t>(idx.leftIndex)]);
-        if(idx.rightIndex >= 0 &&
-           idx.rightIndex < static_cast<int>(pKF->mTagFrameData.right.size()))
-            consider(&pKF->mTagFrameData.right[static_cast<std::size_t>(idx.rightIndex)]);
+        if(idx.left_index >= 0 &&
+           idx.left_index < static_cast<int>(pKF->tag_frame_data_.left_.size()))
+            consider(&pKF->tag_frame_data_.left_[static_cast<std::size_t>(idx.left_index)]);
+        if(idx.right_index >= 0 &&
+           idx.right_index < static_cast<int>(pKF->tag_frame_data_.right_.size()))
+            consider(&pKF->tag_frame_data_.right_[static_cast<std::size_t>(idx.right_index)]);
     }
 
     if(n <= 0)
@@ -295,7 +295,7 @@ TagPoseOptParams TagPoseOptParams::FromSettings(const std::string &settings_path
         params.inertial_enable = params.enable;
     }
 
-    // 兼容旧 yaml：仅写了 inertial 键时仍生效；与 pose_optimization 同时存在则以 pose_optimization 为准
+    // Legacy yaml: still applies when only the inertial key is set; if pose_optimization is also present, pose_optimization wins
     node = fs["Tag.inertial_pose_optimization"];
     if(!node.empty() && fs["Tag.pose_optimization"].empty())
         params.inertial_enable = static_cast<int>(node) != 0;
@@ -452,7 +452,7 @@ namespace {
 
 bool ObservationEligible(const TagObservation &obs)
 {
-    // 仅看检测有效性；优化外点不得阻止同帧再次加入约束
+    // Look only at detection validity; an optimization outlier must not stop the same frame from adding the constraint again
     return obs.IsDetectValid();
 }
 
@@ -462,12 +462,12 @@ bool CollectNeededTagIds(const Frame *pFrame, std::unordered_set<int> &ids)
     if(!pFrame)
         return false;
 
-    for(const TagObservation &obs : pFrame->mTagFrameData.left)
+    for(const TagObservation &obs : pFrame->tag_frame_data_.left_)
     {
         if(ObservationEligible(obs))
             ids.insert(obs.tag_id);
     }
-    for(const TagObservation &obs : pFrame->mTagFrameData.right)
+    for(const TagObservation &obs : pFrame->tag_frame_data_.right_)
     {
         if(ObservationEligible(obs))
             ids.insert(obs.tag_id);
@@ -527,5 +527,5 @@ std::vector<TagPoseConstraint> BuildTagMapSnapshot(
     return out;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

@@ -1,27 +1,27 @@
 %YAML:1.0
 #--------------------------------------------------------------------------------------------
 # Aqua/Tank stereo + IMU — TagFusion stereo-inertial
-# Dataset: /home/geneta/下载/Tank  (rosbag /imu/data + 去雾双目)
+# Dataset: Tank (rosbag /imu/data + dehazed stereo)
 #
-# Path layout（与 stereo_inertial_test_tag 搜索逻辑兼容）:
+# Path layout (compatible with stereo_inertial_test_tag search logic):
 #   .../short_test
 #   .../short_test/left  +  .../short_test/right
 #   .../short_test/imu0.txt
 #
 # Resolved as:
-#   .../left + .../right   (或 cam0/data+cam1/data, mav0/cam0|cam1/data)
+#   .../left + .../right   (or cam0/data+cam1/data, mav0/cam0|cam1/data)
 #   .../imu0.txt
-#   图像文件名: frame_<t>.png（左右同名）
-#   imu0.txt: "<t> gx gy gz ax ay az"  （rad/s, m/s^2）
+#   Image names: frame_<t>.png (same names on left and right)
+#   imu0.txt: "<t> gx gy gz ax ay az"  (rad/s, m/s^2)
 #
 # Camera: 612 x 512 x2, 20 Hz, FOV 90°, baseline 0.12 m
-#   内参来自 short_test.yaml: fx=fy=655, cx=306, cy=256, bf=78.89165891925023
-#   baseline = bf/fx ≈ 0.120445 m（规格 0.12 m）
-# IMU: MICROSTRAIN 3DM-GX5-AHRS，bag 实测 /imu/data ~333 Hz
-#   IMU.T_b_c1 = short_test.yaml T_imu_camera（body = IMU）
+#   Intrinsics from short_test.yaml: fx=fy=655, cx=306, cy=256, bf=78.89165891925023
+#   baseline = bf/fx ≈ 0.120445 m (spec 0.12 m)
+# IMU: MICROSTRAIN 3DM-GX5-AHRS, bag measured /imu/data ~333 Hz
+#   IMU.T_b_c1 = short_test.yaml T_imu_camera (body = IMU)
 #
-# 噪声由 3DM-GX5-AHRS 手册换算为 ORB-SLAM3 连续时间密度
-#   （yaml 值再乘/除 sqrt(IMU.Frequency)，见 Tracking::newParameterLoader）:
+# Noise converted from the 3DM-GX5-AHRS manual to ORB-SLAM3 continuous-time densities
+#   (yaml values are then multiplied or divided by sqrt(IMU.Frequency); see Tracking::newParameterLoader):
 #   Gyro noise density 0.005 °/s/√Hz → 8.73e-05 rad/s/√Hz
 #   Gyro bias instability 8 °/hr    → 3.88e-05 rad/s²/√Hz
 #   Acc  noise density 25 μg/√Hz    → 2.45e-04 m/s²/√Hz
@@ -49,7 +49,7 @@ Camera1.k2: 0.0
 Camera1.p1: 0.0
 Camera1.p2: 0.0
 
-# 数据集仅给左目内参；右目复用左目
+# Dataset gives left intrinsics only; right reuses the left
 Camera2.fx: 655.0
 Camera2.fy: 655.0
 Camera2.cx: 306.0
@@ -63,14 +63,14 @@ Camera2.p2: 0.0
 Camera.width: 612
 Camera.height: 512
 
-# timestamps 相邻约 0.05s
+# adjacent timestamps are about 0.05s
 Camera.fps: 20
 
 Camera.RGB: 1
 
 Stereo.ThDepth: 40.0
 
-# T_c1_c2：左相机系下右相机位姿；平移 x = bf/fx ≈ 0.120445 m（规格 baseline 0.12 m）
+# T_c1_c2: right-camera pose in the left-camera frame; translation x = bf/fx ≈ 0.120445 m (spec baseline 0.12 m)
 Stereo.T_c1_c2: !!opencv-matrix
    rows: 4
    cols: 4
@@ -81,8 +81,8 @@ Stereo.T_c1_c2: !!opencv-matrix
           0.0, 0.0, 0.0, 1.0]
 
 #--------------------------------------------------------------------------------------------
-# IMU Parameters  （body = 3DM-GX5-AHRS；T_b_c1 = short_test.yaml T_imu_camera）
-# imu0.txt 实测约 333 Hz（Ping Rate 333 Hz）
+# IMU Parameters  (body = 3DM-GX5-AHRS; T_b_c1 = short_test.yaml T_imu_camera)
+# imu0.txt measured ~333 Hz (Ping Rate 333 Hz)
 #--------------------------------------------------------------------------------------------
 IMU.T_b_c1: !!opencv-matrix
    rows: 4
@@ -111,8 +111,8 @@ ORBextractor.minThFAST: 7
 
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
-# 离线串行模式下不启动 Pangolin Viewer 线程；Viewer.enable / 下列 3D 参数均被忽略。
-# 图像窗请用下面的 Tag.show_in_orb_viewer（主线程 cv::imshow，只变慢、不改变串行顺序）。
+# Offline serial mode does not start the Pangolin viewer thread; Viewer.enable and the 3D parameters below are ignored.
+# Use Tag.show_in_orb_viewer below for the image window (main-thread cv::imshow; slower only, serial order unchanged).
 #--------------------------------------------------------------------------------------------
 Viewer.enable: 1
 Viewer.KeyFrameSize: 0.05
@@ -132,23 +132,23 @@ Viewer.showTagKFs: 1
 #--------------------------------------------------------------------------------------------
 # Tag Parameters
 #--------------------------------------------------------------------------------------------
-Tag.enable: 1                   # 0=关闭整个 Tag 模块（不检测/不建图/不进优化/不因 Tag 插 KF）
+Tag.enable: 1                   # 0=disable the whole tag module (no detection, mapping, optimization, or tag-based KF insertion)
 Tag.family: "tag36h11"
 Tag.hamming: 2
-# 多种 blackBorder 各扫一遍再按 id 合并（标准印刷=1，加宽黑边=2）
+# scan each blackBorder and merge by id (standard print=1, wider black border=2)
 Tag.black_borders: [1, 2]
-Tag.size: 0.16                  # Tank 默认边长（米）
-Tag.gamma: 0.5                  # <1 提亮暗部；1=关闭。已取消 CLAHE
+Tag.size: 0.16                  # Tank default side length (m)
+Tag.gamma: 0.5                  # <1 brightens dark regions; 1=off. CLAHE removed
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"
-Tag.viewer: 0                   # 离线模式下忽略（TagViewer 线程不启动）
-Tag.save_vis: 0                 # 1=每帧保存检测图（含 0 检测 / gamma）到 Tag.save_vis_dir
-Tag.save_vis_dir: "tag_vis"     # 相对路径相对于运行时 cwd（run_*.sh 会 cd 到本目录）
-Tag.show_in_orb_viewer: 1       # 1=主线程 imshow：Current Frame（ORB+Tag）+ Tag Detect；不启 Pangolin
+Tag.viewer: 0                   # ignored in offline mode (TagViewer thread is not started)
+Tag.save_vis: 0                 # 1=save a detection image every frame (including zero detections / gamma) to Tag.save_vis_dir
+Tag.save_vis_dir: "tag_vis"     # relative path is from the runtime cwd (run_*.sh cds here)
+Tag.show_in_orb_viewer: 1       # 1=main-thread imshow: Current Frame (ORB+Tag) + Tag Detect; Pangolin stays off
 
-# ========================== local BA配置 ==========================
-Tag.pose_optimization: 1   # 纯视觉 PoseOptimization 与惯性 PoseInertial* 共用（运行时只走当前传感器对应的一条分支）
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
 Tag.fixed_only: 0
@@ -158,30 +158,30 @@ Tag.local_ba.corner_sigma: 2.0
 Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1
 
-# ========================== 角点因子自适应权重配置 ==========================
+# ========================== adaptive corner-factor weights ==========================
 Tag.factor_weight.enable: 1
-Tag.factor_weight.alpha: 3.0          # Tag / feature 基础权重比
-Tag.factor_weight.s_sat: 400.0        # 基本满权面积 px^2
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
 Tag.factor_weight.lambda_s: 3.0
-Tag.factor_weight.theta0_deg: 60.0    # 视角特征尺度
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
 Tag.factor_weight.lambda_theta: 1.0
-Tag.factor_weight.phi0_deg: 15.0      # IPPE 双解显著旋转差
-Tag.factor_weight.e0: 1.0             # 双解 residual 区分尺度 px
-Tag.factor_weight.lambda_amb: 0.0         # 0=关闭双解项（w_amb≡1）
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
 Tag.factor_weight.w_min: 0.001
-Tag.factor_weight.verbose: 1          # 1=打印 S,θ,Δφ,Δe 与各分项权重
+Tag.factor_weight.verbose: 1          # 1=print S, theta, delta-phi, delta-e and per-term weights
 
-# ========================== 回环配置 ==========================
+# ========================== loop closure ==========================
 Tag.loop.enable: 1
 Tag.loop.min_history_observations: 2
-Tag.loop.min_keyframe_gap: 30 # 历史回环 KF 与当前 KF 的最小 ID 间隔
-Tag.loop.min_reobservation_gap_kfs: 30 # 最近一次有效观测间隔；过小视为连续可见，不是重新观察
-Tag.loop.min_historical_kf_map_points: 20 # 历史 KF 至少需有这么多跟踪地图点
-Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE解的重投影误差阈值
-Tag.loop.max_stereo_translation_error: 0.20 # 左右目当前相机位姿的位移差阈值
-Tag.loop.max_stereo_rotation_error: 0.20 # 左右目当前相机位姿旋转差阈值
-Tag.loop.max_roll_pitch_correction: 0.30 # Sim3修正的roll和pitch差阈值
-Tag.loop.max_yaw_correction: 1.57 # Sim3修正的yaw差阈值
-Tag.loop.min_consistent_tags: 1 # 至少需要多少个一致的Tag才能认为存在回环
-Tag.loop.reference_timeout_kfs: 4 # 连续若干 KF 未见该 Tag 则清除冻结回环参考
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.30 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
 Tag.loop.verbose: 1

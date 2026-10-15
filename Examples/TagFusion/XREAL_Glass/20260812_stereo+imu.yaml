@@ -1,0 +1,222 @@
+%YAML:1.0
+# Large scene (5F), Flora glasses
+#--------------------------------------------------------------------------------------------
+# XREAL Glass cam0+cam1+imu0 — TagFusion stereo-inertial
+# Dataset: q3fl/20260811/5fr_pat_led_m (SN G419X00029)
+# Sequence: /home/geneta/dataset/5f_long_01-1
+#
+# Path layout（compatible with stereo_inertial_xreal_glass_tag path search）:
+#   .../5f_long_01-1
+#   .../5f_long_01-1/raw_data/glass
+#   .../5f_long_01-1/raw_data/glass/cam0/images
+#
+# Resolved as:
+#   .../raw_data/glass/cam0/images  +  .../raw_data/glass/cam1/images
+#   .../raw_data/glass/imu0.txt
+#   timestamps.txt: "m0000000.pgm <t>"（same names on left and right）
+#   imu0.txt: "<t> <temp> gx gy gz ax ay az"  （rad/s, m/s^2）
+#
+# Intrinsics / extrinsics from:
+#   .../5f_long_01-1/ground_truth/calib/calib_mean.yaml
+# Camera.model: fisheye624 → ORB-SLAM3 KannalaBrandt8 approximated with kc[0:4]
+# Stereo.T_c1_c2 built from cam0_q_cam1 (Hamilton qx,qy,qz,qw) + cam0_p_cam1
+# IMU.T_b_c1 built from cam0 imu_q_cam / imu_p_cam (body = imu0)
+# Resolution (W x H): 480 x 640  （different from the 640x512 q3hy setup; do not reuse that yaml）
+# Camera FPS: ~30
+# IMU: imu0.txt measured ~1000 Hz
+#
+# IMU bias: calib_mean.yaml has acc_bias / gyr_bias, but the ORB-SLAM3 yaml has no matching fields.
+# They are estimated from zero in InitializeIMU and cannot be written into this file.
+#--------------------------------------------------------------------------------------------
+
+File.version: "1.0"
+
+System.saveOnlinePose: 1
+System.saveOnlinePoseFile: "OnlineCameraTrajectory.txt"
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters
+#--------------------------------------------------------------------------------------------
+Camera.type: "KannalaBrandt8"
+
+# Left = cam0
+Camera1.fx: 240.9681970776
+Camera1.fy: 240.9067714099
+Camera1.cx: 240.0975517681
+Camera1.cy: 318.1281371621
+
+Camera1.k1: -0.0036810108714375217
+Camera1.k2:  0.09999201343091109
+Camera1.k3: -0.13310016938095284
+Camera1.k4:  0.07899980015673888
+
+# Right = cam1
+Camera2.fx: 241.2869989076
+Camera2.fy: 241.4901709108
+Camera2.cx: 234.0948003176
+Camera2.cy: 315.5603939576
+
+Camera2.k1: -0.000839355038487684
+Camera2.k2:  0.08913950899419729
+Camera2.k3: -0.11846511651870881
+Camera2.k4:  0.06878455849127584
+
+Camera.width: 480
+Camera.height: 640
+
+# adjacent timestamps are about 0.03333s
+Camera.fps: 30
+
+Camera.RGB: 1
+
+Camera1.overlappingBegin: 0
+Camera1.overlappingEnd: 479
+Camera2.overlappingBegin: 0
+Camera2.overlappingEnd: 479
+
+Stereo.ThDepth: 40.0
+
+# T_c1_c2：cam1 pose in the cam0 frame; baseline about 0.1373 m
+Stereo.T_c1_c2: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [ 0.989669546456667, -0.013586378865835,  0.142722104544350,  0.136985124644495,
+           0.012430785059955,  0.999882362418194,  0.008985371879064,  0.000483911159352,
+          -0.142827393727701, -0.007118401107403,  0.989722013479859, -0.009631374649574,
+           0.0, 0.0, 0.0, 1.0]
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters  （body = imu0; T_b_c1 from calib_mean.yaml cam0 imu_q_cam / imu_p_cam）
+# imu0.txt measured about 1000 Hz (mean dt=0.001s)
+# Noise matches calib_mean.yaml imu_noises:
+#   [gyro_sigma, gyro_walk, accel_sigma, accel_walk]
+#--------------------------------------------------------------------------------------------
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [ 0.997108174394335,  0.006057672590311, -0.075753502617277, -0.049514924787482,
+           0.002982986115640,  0.992930000017755,  0.118663881862072,  0.003324827799543,
+           0.075936752299733, -0.118546698256554,  0.990040549665840,  0.011630323857686,
+           0.0, 0.0, 0.0, 1.0]
+
+IMU.NoiseGyro: 3.5e-04
+IMU.NoiseAcc: 6.67e-03
+IMU.GyroWalk: 1.0e-05
+IMU.AccWalk: 6.8e-04
+IMU.Frequency: 1000.0
+IMU.InsertKFsWhenLost: 1
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+# Offline serial mode does not start the Pangolin viewer thread; Viewer.enable and the 3D parameters below are ignored.
+# Use Tag.show_in_orb_viewer below for the image window (main-thread cv::imshow; slower only, serial order unchanged).
+#--------------------------------------------------------------------------------------------
+Viewer.enable: 1
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.5
+Viewer.ViewpointZ: -1.2
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0
+Viewer.showTagMap: 1
+Viewer.showTagKFs: 1
+
+#--------------------------------------------------------------------------------------------
+# Tag Parameters
+#--------------------------------------------------------------------------------------------
+Tag.enable: 1                   # 0=disable the whole tag module (no detection, mapping, optimization, or tag-based KF insertion)
+Tag.family: "tag36h11"
+Tag.hamming: 2
+# scan each blackBorder and merge by id (standard print=1, wider black border=2)
+Tag.black_borders: [1, 2]
+Tag.size: 0.144                  # default side length in meters; ids not listed in size_by_id use this
+Tag.size_by_id:                  # per-id side length; shared visualization parameters stay unchanged
+  - { id: 77, size: 0.06 }
+  - { id: 78, size: 0.06 }
+  - { id: 79, size: 0.06 }
+  - { id: 80, size: 0.06 }
+  - { id: 81, size: 0.06 }
+  - { id: 82, size: 0.06 }
+  - { id: 88, size: 0.06 }
+  - { id: 89, size: 0.06 }
+  - { id: 90, size: 0.06 }
+  - { id: 91, size: 0.06 }
+  - { id: 92, size: 0.06 }
+  - { id: 93, size: 0.06 }
+  - { id: 99, size: 0.06 }
+  - { id: 100, size: 0.06 }
+  - { id: 101, size: 0.06 }
+  - { id: 102, size: 0.06 }
+  - { id: 103, size: 0.06 }
+  - { id: 104, size: 0.06 }
+  - { id: 110, size: 0.06 }
+  - { id: 111, size: 0.06 }
+  - { id: 112, size: 0.06 }
+  - { id: 113, size: 0.06 }
+  - { id: 114, size: 0.06 }
+  - { id: 115, size: 0.06 }
+Tag.ignore_ids: [91, 92, 93]  # drop detections of these tag ids.
+Tag.gamma_enable: 1             # 0=no gamma before AprilTag; 1=apply Tag.gamma
+Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 brightens dark regions. CLAHE is disabled
+Tag.verbose: 1
+Tag.export: 1
+Tag.export_dir: "tag_export"
+Tag.viewer: 0                   # ignored in offline mode (TagViewer thread is not started)
+Tag.save_vis: 0                 # 1=save a detection image every frame (including zero detections / gamma) to Tag.save_vis_dir
+Tag.save_vis_dir: "tag_vis"     # relative path is from the runtime cwd (run_*.sh cds here)
+Tag.show_in_orb_viewer: 0       # 1=main-thread imshow: Current Frame (ORB+Tag) + Tag Detect; Pangolin stays off
+
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
+Tag.corner_sigma: 2.0
+Tag.min_inlier_corners: 3
+Tag.fixed_only: 0
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1
+
+# ========================== adaptive corner-factor weights ==========================
+Tag.factor_weight.enable: 1
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
+Tag.factor_weight.lambda_s: 3.0
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
+Tag.factor_weight.lambda_theta: 1.0
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
+Tag.factor_weight.w_min: 0.001
+Tag.factor_weight.verbose: 1          # 1=print S, theta, delta-phi, delta-e and per-term weights
+
+# ========================== loop closure ==========================
+Tag.loop.enable: 1
+Tag.loop.min_history_observations: 2
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.30 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
+Tag.loop.verbose: 1

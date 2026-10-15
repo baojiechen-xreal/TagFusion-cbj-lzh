@@ -52,7 +52,7 @@ class KeyFrameDatabase;
 
 class GeometricCamera;
 
-namespace tag {
+namespace xreal_tag {
 class MapTagData;
 }
 
@@ -264,27 +264,27 @@ public:
     int TrackedMapPoints(const int &minObs);
     MapPoint* GetMapPoint(const size_t &idx);
 
-    // MapTag 关联：角点测量只在 mTagFrameData；此处存 MapTag* + 左右观测索引
-    // 所有权：MapTagData* 非拥有；完整双向更新只允许经本类接口
+    // MapTag association: corner measurements live only in tag_frame_data_; this stores MapTag* plus the left/right observation indices
+    // Ownership: MapTagData* is non-owning; a full two-way update is allowed only through this class's interface
     struct MapTagAssociation
     {
-        tag::MapTagData *pMapTag = nullptr;
+        xreal_tag::MapTagData *pMapTag = nullptr;
         int leftObservationIndex = -1;
         int rightObservationIndex = -1;
 
-        // 当前 KF 首次关联该 Tag 前冻结的最新世界位姿快照，而非 Tag 的初始化位姿。
-        // 该快照通常代表“当前 KF 到来前”的最新 T_wt；后续本次 Local BA 即使
-        // 修改 MapTagData::mTwt，也不会回写这里，因此 Tag loop 可避开本次 LBA 污染。
+        // Frozen snapshot of the latest world pose before this KF is first associated with the Tag, not the Tag's initialization pose.
+        // The snapshot is usually the latest T_wt from before the current KF arrived. Even if this Local BA later
+        // changes MapTagData::mTwt, that change is not written back here, so the Tag loop can avoid contamination from this LBA.
         Sophus::SE3f historicalTagPose;
         bool hasHistoricalTagPose = false;
         size_t historicalObservationCount = 0;
     };
 
-    bool AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex);
+    bool AddMapTag(xreal_tag::MapTagData *pTag, int leftIndex, int rightIndex);
     void EraseMapTag(int tagId);
     void EraseAllMapTags();
-    tag::MapTagData *GetMapTag(int tagId) const;
-    std::vector<tag::MapTagData *> GetMapTagMatches() const;
+    xreal_tag::MapTagData *GetMapTag(int tagId) const;
+    std::vector<xreal_tag::MapTagData *> GetMapTagMatches() const;
     bool GetMapTagAssociation(int tagId, MapTagAssociation &association) const;
     std::unordered_map<int, MapTagAssociation> GetMapTagAssociations() const;
 
@@ -303,7 +303,7 @@ public:
     void SetBadFlag();
     bool isBad();
 
-    // Tag 米制初始化：固定位姿，防止后续 BA 漂尺度
+    // Tag metric initialization: fix the pose so later BA does not drift the scale
     void SetFixedPose(bool flag) { mbFixedPose = flag; }
     bool IsFixedPose() const { return mbFixedPose; }
 
@@ -454,8 +454,8 @@ public:
     int mnDataset;
 
     // AprilTag observations copied from the source Frame at keyframe creation.
-    // 唯一 Tag 角点测量源。
-    tag::TagFrameData mTagFrameData;
+    // The only source of Tag corner measurements.
+    xreal_tag::TagFrameData tag_frame_data_;
 
     std::vector <KeyFrame*> mvpLoopCandKFs;
     std::vector <KeyFrame*> mvpMergeCandKFs;
@@ -489,7 +489,7 @@ protected:
     // For save relation without pointer, this is necessary for save/load function
     std::vector<long long int> mvBackupMapPointsId;
 
-    // tag_id -> MapTag 关联（与 MapTagData 观测双向；裸指针非拥有）
+    // tag_id -> MapTag association (two-way with MapTagData observations; non-owning raw pointer)
     std::unordered_map<int, MapTagAssociation> mMapTagAssociations;
 
     // BoW
@@ -522,7 +522,7 @@ protected:
     bool mbToBeErased;
     bool mbBad;
 
-    // Tag 米制初始化：为 true 时 Local/Global BA 中固定该 KF 位姿，防止尺度被漂掉
+    // Tag metric initialization: when true, Local/Global BA fixes this KF pose so the scale is not drifted away
     bool mbFixedPose;
 
     float mHalfBaseline; // Only for visualization

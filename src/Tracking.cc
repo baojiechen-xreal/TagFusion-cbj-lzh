@@ -63,8 +63,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
     mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL)),
-    mpAprilTagDetector(nullptr), mpTagInitializer(nullptr), mpTagTracker(nullptr),
-    mpTagViewer(nullptr)
+    april_tag_detector_(nullptr), tag_initializer_(nullptr), tag_tracker_(nullptr),
+    tag_viewer_(nullptr)
 {
     // Load camera parameters from settings file
     if(settings){
@@ -112,9 +112,9 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         }
     }
 
-    mbTagEnabled = tag::ModuleEnabledFromSettings(strSettingPath);
-    mTagPoseOptParams = tag::TagPoseOptParams::FromSettings(strSettingPath);
-    if(!mbTagEnabled)
+    tag_enabled_ = xreal_tag::ModuleEnabledFromSettings(strSettingPath);
+    tag_pose_opt_params_ = xreal_tag::TagPoseOptParams::FromSettings(strSettingPath);
+    if(!tag_enabled_)
     {
         std::cout << "Tag.enable=0: Tag module disabled "
                      "(no detect / map / opt / Tag-forced KF)"
@@ -125,12 +125,12 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 #ifdef HAS_APRILTAG
     try
     {
-        // 从 yaml 初始化 AprilTagDetector（Tag.* 检测参数）。
-        // SetCameraModel + SetGeometricCamera：去畸变/重投影与 ORB BA 共用 GeometricCamera。
-        mpAprilTagDetector = new ua_tag::AprilTagDetector(strSettingPath);
-        if(mpAprilTagDetector && mpCamera && !mK.empty())
+        // Initialize AprilTagDetector from yaml (Tag.* detection parameters).
+        // SetCameraModel + SetGeometricCamera: undistortion/reprojection share GeometricCamera with ORB BA.
+        april_tag_detector_ = new xreal_tag::AprilTagDetector(strSettingPath);
+        if(april_tag_detector_ && mpCamera && !mK.empty())
         {
-            ua_tag::CameraModel cam_model;
+            xreal_tag::CameraModel cam_model;
             cam_model.fx = static_cast<double>(mK.at<float>(0, 0));
             cam_model.fy = static_cast<double>(mK.at<float>(1, 1));
             cam_model.cx = static_cast<double>(mK.at<float>(0, 2));
@@ -146,31 +146,31 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
             {
                 mDistCoef.convertTo(cam_model.dist_coeffs, CV_64F);
             }
-            mpAprilTagDetector->SetCameraModel(cam_model);
-            mpAprilTagDetector->SetGeometricCamera(mpCamera);
+            april_tag_detector_->SetCameraModel(cam_model);
+            april_tag_detector_->SetGeometricCamera(mpCamera);
         }
     }
     catch(const std::exception &e)
     {
         std::cerr << "WARNING: failed to init AprilTagDetector: " << e.what() << std::endl;
-        mpAprilTagDetector = nullptr;
+        april_tag_detector_ = nullptr;
     }
 #endif
-    mpTagInitializer = new tag::TagInitializer(strSettingPath);
-    mpTagTracker = new tag::TagTracker(strSettingPath);
-    if(mTagPoseOptParams.enable || mTagPoseOptParams.inertial_enable)
+    tag_initializer_ = new xreal_tag::TagInitializer(strSettingPath);
+    tag_tracker_ = new xreal_tag::TagTracker(strSettingPath);
+    if(tag_pose_opt_params_.enable || tag_pose_opt_params_.inertial_enable)
     {
         std::cout << "Tag joint pose optimization enabled"
-                  << " visual=" << (mTagPoseOptParams.enable ? 1 : 0)
-                  << " inertial=" << (mTagPoseOptParams.inertial_enable ? 1 : 0)
-                  << " (corner_sigma=" << mTagPoseOptParams.corner_sigma
-                  << ", min_inlier_corners=" << mTagPoseOptParams.min_inlier_corners
-                  << ", fixed_only=" << (mTagPoseOptParams.fixed_only ? 1 : 0)
-                  << ", factor_weight=" << (mTagPoseOptParams.factor_weight.enable ? 1 : 0)
+                  << " visual=" << (tag_pose_opt_params_.enable ? 1 : 0)
+                  << " inertial=" << (tag_pose_opt_params_.inertial_enable ? 1 : 0)
+                  << " (corner_sigma=" << tag_pose_opt_params_.corner_sigma
+                  << ", min_inlier_corners=" << tag_pose_opt_params_.min_inlier_corners
+                  << ", fixed_only=" << (tag_pose_opt_params_.fixed_only ? 1 : 0)
+                  << ", factor_weight=" << (tag_pose_opt_params_.factor_weight.enable ? 1 : 0)
                   << ")" << std::endl;
-        if(mTagPoseOptParams.factor_weight.enable)
+        if(tag_pose_opt_params_.factor_weight.enable)
         {
-            const auto &w = mTagPoseOptParams.factor_weight;
+            const auto &w = tag_pose_opt_params_.factor_weight;
             std::cout << "Tag factor weight"
                       << " alpha=" << w.alpha
                       << " S_sat=" << w.s_sat
@@ -201,31 +201,31 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
                 enable_save_vis = static_cast<int>(node);
             node = fsTagViewer["Tag.save_vis_dir"];
             if(!node.empty() && node.isString())
-                mTagSaveVisDir = static_cast<std::string>(node);
+                tag_save_vis_dir_ = static_cast<std::string>(node);
             node = fsTagViewer["Tag.show_in_orb_viewer"];
             if(!node.empty())
                 enable_show_orb = static_cast<int>(node);
         }
-        mbTagSaveVis = (enable_save_vis != 0);
-        // 与旧 Pangolin Viewer 的 Current Frame / Tag Detect 窗共用 Tag.show_in_orb_viewer
-        mbTagShowInOrbViewer = (enable_show_orb != 0);
-        if(mbTagSaveVis)
+        tag_save_vis_ = (enable_save_vis != 0);
+        // Shares Tag.show_in_orb_viewer with the old Pangolin Viewer's Current Frame / Tag Detect windows
+        tag_show_in_orb_viewer_ = (enable_show_orb != 0);
+        if(tag_save_vis_)
         {
-            if(!mTagSaveVisDir.empty() && mTagSaveVisDir[0] != '/')
+            if(!tag_save_vis_dir_.empty() && tag_save_vis_dir_[0] != '/')
             {
                 char cwd[4096];
                 if(getcwd(cwd, sizeof(cwd)))
-                    mTagSaveVisDir = std::string(cwd) + "/" + mTagSaveVisDir;
+                    tag_save_vis_dir_ = std::string(cwd) + "/" + tag_save_vis_dir_;
             }
-            std::cout << "Tag save_vis enabled -> " << mTagSaveVisDir
+            std::cout << "Tag save_vis enabled -> " << tag_save_vis_dir_
                       << " (every frame, including 0 detections)" << std::endl;
         }
-        if(mbTagShowInOrbViewer)
+        if(tag_show_in_orb_viewer_)
         {
             std::cout << "Tag overlay on ORB Current Frame enabled"
                       << " (offline imshow: Current Frame + Tag Detect, no Pangolin)"
                       << std::endl;
-            // PinHole 双目默认 only left；开叠加时并排显示左右图以便看右目 Tag
+            // PinHole stereo defaults to left only; when the overlay is on, show left and right side by side so the right-camera Tag is visible
             if(mSensor == System::STEREO || mSensor == System::IMU_STEREO)
                 mpFrameDrawer->both = true;
         }
@@ -705,19 +705,19 @@ Tracking::~Tracking()
         mOnlinePoseFile.close();
 
 #ifdef HAS_APRILTAG
-    if(mpTagViewer)
+    if(tag_viewer_)
     {
-        mpTagViewer->RequestFinish();
-        delete mpTagViewer;
-        mpTagViewer = nullptr;
+        tag_viewer_->RequestFinish();
+        delete tag_viewer_;
+        tag_viewer_ = nullptr;
     }
-    delete mpAprilTagDetector;
-    mpAprilTagDetector = nullptr;
+    delete april_tag_detector_;
+    april_tag_detector_ = nullptr;
 #endif
-    delete mpTagInitializer;
-    mpTagInitializer = nullptr;
-    delete mpTagTracker;
-    mpTagTracker = nullptr;
+    delete tag_initializer_;
+    tag_initializer_ = nullptr;
+    delete tag_tracker_;
+    tag_tracker_ = nullptr;
 }
 
 void Tracking::AppendOnlinePoseTUM()
@@ -761,7 +761,7 @@ void Tracking::newParameterLoader(Settings *settings) {
     mK_(0,2) = mpCamera->getParameter(2);
     mK_(1,2) = mpCamera->getParameter(3);
 
-    // 双目必须从配置加载独立 Camera2，禁止回退左目
+    // Stereo must load an independent Camera2 from the config; do not fall back to the left camera
     if(mSensor==System::STEREO || mSensor==System::IMU_STEREO){
         if(!settings->camera2()){
             std::cerr << "ERROR: Stereo/IMU_STEREO requires Camera2.* in settings file"
@@ -771,7 +771,7 @@ void Tracking::newParameterLoader(Settings *settings) {
         mpCamera2 = settings->camera2();
         mpCamera2 = mpAtlas->AddCamera(mpCamera2);
 
-        // PinHole：T_c1_c2；Rectified：Settings 已用 Stereo.b 填 Tlr（+X 基线）
+        // PinHole: T_c1_c2; Rectified: Settings already fills Tlr from Stereo.b (+X baseline)
         mTlr = settings->Tlr();
 
         if(settings->cameraType() == Settings::KannalaBrandt)
@@ -1665,7 +1665,7 @@ void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
 void Tracking::SetViewer(Viewer *pViewer)
 {
     mpViewer=pViewer;
-    // System 创建 Viewer 线程后才调用此处；同步双目图像窗开关
+    // Called only after System creates the Viewer thread; sync the stereo image-window switch
     if(mpViewer && mpFrameDrawer)
         mpViewer->both = mpFrameDrawer->both;
 }
@@ -1733,18 +1733,18 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
 
     if (mSensor == System::STEREO &&
         mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
-        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
+        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,static_cast<Frame*>(NULL),IMU::Calib(),april_tag_detector_);
     else if(mSensor == System::STEREO)
     {
-        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector,mpCamera2);
+        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,static_cast<Frame*>(NULL),IMU::Calib(),april_tag_detector_,mpCamera2);
         mCurrentFrame.SetRelativePoseTlr(mTlr);
     }
     else if(mSensor == System::IMU_STEREO &&
             mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
-        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
+        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,&mLastFrame,*mpImuCalib,april_tag_detector_);
     else if(mSensor == System::IMU_STEREO)
     {
-        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib,mpAprilTagDetector,mpCamera2);
+        mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib,april_tag_detector_,mpCamera2);
         mCurrentFrame.SetRelativePoseTlr(mTlr);
     }
 
@@ -1758,9 +1758,9 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
     vdStereoMatch_ms.push_back(mCurrentFrame.mTimeStereoMatch);
 #endif
 
-    // Tag追踪（左右目检测已在 Frame 构造时完成）
+    // Tag tracking (left/right detection already finished in the Frame constructor)
     TagTrack();
-    // ORB追踪
+    // ORB tracking
     Track();
 
     return mCurrentFrame.GetPose();
@@ -1838,18 +1838,18 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     if (mSensor == System::MONOCULAR)
     {
         if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET ||(lastID - initID) < mMaxFrames)
-            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
+            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),april_tag_detector_);
         else
-            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
+            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),april_tag_detector_);
     }
     else if(mSensor == System::IMU_MONOCULAR)
     {
         if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
         {
-            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
+            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,april_tag_detector_);
         }
         else
-            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
+            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,april_tag_detector_);
     }
 
     if (mState==NO_IMAGES_YET)
@@ -1864,9 +1864,9 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
 
     lastID = mCurrentFrame.mnId;
 
-    // Tag追踪
+    // Tag tracking
     TagTrack();
-    // ORB追踪
+    // ORB tracking
     Track();
 
     return mCurrentFrame.GetPose();
@@ -2052,7 +2052,7 @@ void Tracking::EstimateAndVisualizeTagPoses()
 {
 #ifdef HAS_APRILTAG
     const bool have_tags =
-        mpAprilTagDetector && !mCurrentFrame.mTagFrameData.Empty();
+        april_tag_detector_ && !mCurrentFrame.tag_frame_data_.IsEmpty();
     if(have_tags)
     {
     const auto t_ippe0 = std::chrono::steady_clock::now();
@@ -2065,7 +2065,7 @@ void Tracking::EstimateAndVisualizeTagPoses()
                       << std::endl;
             exit(-1);
         }
-        ua_tag::CameraModel camera;
+        xreal_tag::CameraModel camera;
         camera.fx = static_cast<double>(cam->getParameter(0));
         camera.fy = static_cast<double>(cam->getParameter(1));
         camera.cx = static_cast<double>(cam->getParameter(2));
@@ -2084,14 +2084,14 @@ void Tracking::EstimateAndVisualizeTagPoses()
         return camera;
     };
 
-    // 左目 IPPE
-    const ua_tag::CameraModel camera_left = make_camera_model(mpCamera, mDistCoef);
-    mpAprilTagDetector->SetGeometricCamera(mpCamera);
-    for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.left)
-        mpAprilTagDetector->EstimatePose(obs, camera_left, nullptr);
+    // Left-camera IPPE
+    const xreal_tag::CameraModel camera_left = make_camera_model(mpCamera, mDistCoef);
+    april_tag_detector_->SetGeometricCamera(mpCamera);
+    for(xreal_tag::TagObservation &obs : mCurrentFrame.tag_frame_data_.left_)
+        april_tag_detector_->EstimatePose(obs, camera_left, nullptr);
 
-    // 右目 IPPE：必须独立 Camera2
-    if(!mCurrentFrame.mTagFrameData.right.empty())
+    // Right-camera IPPE: requires an independent Camera2
+    if(!mCurrentFrame.tag_frame_data_.right_.empty())
     {
         if(!mpCamera2)
         {
@@ -2100,18 +2100,18 @@ void Tracking::EstimateAndVisualizeTagPoses()
                       << std::endl;
             exit(-1);
         }
-        const ua_tag::CameraModel camera_right =
+        const xreal_tag::CameraModel camera_right =
             make_camera_model(mpCamera2, mDistCoef);
-        mpAprilTagDetector->SetGeometricCamera(mpCamera2);
-        for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
-            mpAprilTagDetector->EstimatePose(obs, camera_right, nullptr);
-        mpAprilTagDetector->SetGeometricCamera(mpCamera);
+        april_tag_detector_->SetGeometricCamera(mpCamera2);
+        for(xreal_tag::TagObservation &obs : mCurrentFrame.tag_frame_data_.right_)
+            april_tag_detector_->EstimatePose(obs, camera_right, nullptr);
+        april_tag_detector_->SetGeometricCamera(mpCamera);
 
-        // 交叉重投影消歧：同 ID 左右观测成对，先 L→R 再必要时 R→L
-        // 仅地图中已 ACTIVE 的 Tag 静默；CANDIDATE / 未入图仍打印 [TagStereo]
-        std::unordered_map<int, tag::TagObservation *> right_by_id;
-        right_by_id.reserve(mCurrentFrame.mTagFrameData.right.size());
-        for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
+        // Cross-reprojection disambiguation: pair left/right observations of the same ID, try L->R first, then R->L if needed
+        // Silence only Tags already ACTIVE in the map; CANDIDATE / not yet in the map still print [TagStereo]
+        std::unordered_map<int, xreal_tag::TagObservation *> right_by_id;
+        right_by_id.reserve(mCurrentFrame.tag_frame_data_.right_.size());
+        for(xreal_tag::TagObservation &obs : mCurrentFrame.tag_frame_data_.right_)
         {
             if(!obs.IsDetectValid())
                 continue;
@@ -2120,7 +2120,7 @@ void Tracking::EstimateAndVisualizeTagPoses()
 
         Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
         const Sophus::SE3f T_lr = mCurrentFrame.GetRelativePoseTlr();
-        for(tag::TagObservation &left_obs : mCurrentFrame.mTagFrameData.left)
+        for(xreal_tag::TagObservation &left_obs : mCurrentFrame.tag_frame_data_.left_)
         {
             if(!left_obs.IsDetectValid())
                 continue;
@@ -2135,52 +2135,52 @@ void Tracking::EstimateAndVisualizeTagPoses()
             if(pMap)
             {
                 const Map::MapTagPtr pTag = pMap->GetMapTag(left_obs.tag_id);
-                if(pTag && pTag->GetState() == tag::MapTagState::ACTIVE)
+                if(pTag && pTag->GetState() == xreal_tag::MapTagState::ACTIVE)
                     log_stereo = false;
             }
-            const double tag_size = mpAprilTagDetector->GetTagSize(left_obs.tag_id);
-            ua_tag::DisambiguateWithStereo(
+            const double tag_size = april_tag_detector_->GetTagSize(left_obs.tag_id);
+            xreal_tag::DisambiguateWithStereo(
                 left_obs, *it->second, T_lr, mpCamera, mpCamera2, tag_size, 3.0,
                 log_stereo);
         }
     }
         mLastTagIppeMs = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t_ippe0).count();
-    }  // have_tags：无检测时仍保存预处理检测图
+    }  // have_tags: still save the preprocessed detection image when there is no detection
 
-    // 可选存盘：Tag.save_vis=1 时每帧写 tag_vis/frame_XXXXXX.png（含 0 检测）
-    if(mbTagSaveVis)
+    // Optional save: when Tag.save_vis=1, write tag_vis/frame_XXXXXX.png every frame (including 0 detections)
+    if(tag_save_vis_)
     {
-        const cv::Mat &imLeftVis = mCurrentFrame.mImTagDetect.empty()
+        const cv::Mat &imLeftVis = mCurrentFrame.im_tag_detect_.empty()
                                        ? mImGray
-                                       : mCurrentFrame.mImTagDetect;
-        const cv::Mat &imRightVis = mCurrentFrame.mImTagDetectRight.empty()
+                                       : mCurrentFrame.im_tag_detect_;
+        const cv::Mat &imRightVis = mCurrentFrame.im_tag_detect_right_.empty()
                                         ? mImRight
-                                        : mCurrentFrame.mImTagDetectRight;
-        if(!ua_tag::EnsureDir(mTagSaveVisDir))
+                                        : mCurrentFrame.im_tag_detect_right_;
+        if(!xreal_tag::EnsureDir(tag_save_vis_dir_))
         {
-            std::cerr << "[TagVis] failed to create dir: " << mTagSaveVisDir
+            std::cerr << "[TagVis] failed to create dir: " << tag_save_vis_dir_
                       << std::endl;
         }
         else
         {
             char visName[64];
             std::snprintf(visName, sizeof(visName), "frame_%06lu.png", mCurrentFrame.mnId);
-            const std::string visPath = mTagSaveVisDir + "/" + visName;
+            const std::string visPath = tag_save_vis_dir_ + "/" + visName;
             const bool is_stereo =
                 (mSensor == System::STEREO || mSensor == System::IMU_STEREO) &&
                 !imRightVis.empty();
             const bool ok = is_stereo
-                ? ua_tag::SaveTagsVis(imLeftVis, imRightVis,
-                                      mCurrentFrame.mTagFrameData, visPath)
-                : ua_tag::SaveTagsVis(imLeftVis, mCurrentFrame.mTagFrameData, visPath);
+                ? xreal_tag::SaveTagsVis(imLeftVis, imRightVis,
+                                      mCurrentFrame.tag_frame_data_, visPath)
+                : xreal_tag::SaveTagsVis(imLeftVis, mCurrentFrame.tag_frame_data_, visPath);
             static bool sLoggedOk = false;
             static bool sLoggedFail = false;
             if(ok)
             {
                 if(!sLoggedOk)
                 {
-                    std::cout << "[TagVis] writing frames to " << mTagSaveVisDir
+                    std::cout << "[TagVis] writing frames to " << tag_save_vis_dir_
                               << std::endl;
                     sLoggedOk = true;
                 }
@@ -2199,25 +2199,25 @@ void Tracking::TagTrack()
 {
     mLastTagDetectMs = mCurrentFrame.mTimeTagDetect_ms;
     mLastTagIppeMs = 0.0;
-    if(!mbTagEnabled)
+    if(!tag_enabled_)
         return;
 #ifdef HAS_APRILTAG
-    // 每帧独立 Tag 观测：检测已在 Frame 构造 DetectAndStoreTags 完成，
-    // 这里只做 IPPE / 双目消歧。不改相机位姿，也不走 TagTracker::Track。
+    // Per-frame independent Tag observations: detection already finished in Frame::DetectAndStoreTags;
+    // here only IPPE / stereo disambiguation. Do not change the camera pose, and do not call TagTracker::Track.
     EstimateAndVisualizeTagPoses();
-    if(mpTagTracker)
-        mpTagTracker->LogTagDetections(mCurrentFrame);
+    if(tag_tracker_)
+        tag_tracker_->LogTagDetections(mCurrentFrame);
 #endif
 }
 
 int Tracking::OptimizeCurrentPose(bool useTags)
 {
-    if(useTags && mTagPoseOptParams.enable)
+    if(useTags && tag_pose_opt_params_.enable)
     {
         Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
         const auto tagSnap =
-            tag::BuildTagMapSnapshot(pMap, &mCurrentFrame, mTagPoseOptParams);
-        return Optimizer::PoseOptimization(&mCurrentFrame, tagSnap, mTagPoseOptParams);
+            xreal_tag::BuildTagMapSnapshot(pMap, &mCurrentFrame, tag_pose_opt_params_);
+        return Optimizer::PoseOptimization(&mCurrentFrame, tagSnap, tag_pose_opt_params_);
     }
     return Optimizer::PoseOptimization(&mCurrentFrame);
 }
@@ -2338,7 +2338,7 @@ void Tracking::Track()
             MonocularInitialization();
         }
 
-        // 初始化阶段也刷新 OpenCV 窗（原图 ORB + Tag 检测图）；失败时下一句会 return
+        // Also refresh the OpenCV windows during initialization (raw ORB + Tag detection image); the next statement returns on failure
         if(mpFrameDrawer)
             mpFrameDrawer->Update(this);
         ShowOfflineImshowWindows();
@@ -2676,9 +2676,9 @@ void Tracking::Track()
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_StartNewKF = std::chrono::steady_clock::now();
 #endif
-            // ORB 跟踪稳定后再建 Tag 地图（IMU 还须 VIBA 1）；勿在 StereoInitialization 里提前 Commit
+            // Build the Tag map only after ORB tracking is stable (IMU also needs VIBA 1); do not Commit early inside StereoInitialization
             bool tagInitCreatedKF = false;
-            if(mbTagEnabled && bOK && mState == OK)
+            if(tag_enabled_ && bOK && mState == OK)
                 tagInitCreatedKF = TryInitializeTagMapAfterOrbTracking();
 
             if(!tagInitCreatedKF)
@@ -2751,7 +2751,7 @@ void Tracking::Track()
             mlFrameTimes.push_back(mCurrentFrame.mTimeStamp);
             mlbLost.push_back(mState==LOST);
 
-            // 在线 TUM：仅 OK 帧，当前估计的绝对 Twc（不受后续 BA 回写影响）
+            // Online TUM: OK frames only, the current estimated absolute Twc (later BA writeback does not change it)
             if(mState==OK)
                 AppendOnlinePoseTUM();
         }
@@ -2816,19 +2816,19 @@ void Tracking::StereoInitialization()
         else
             mCurrentFrame.SetPose(Sophus::SE3f());
 
-        // Tag 不在此处建图。StereoInitialization 之后下一帧仍可能 ResetActiveMap
-        // （TrackLocalMap 失败、或 IMU “Not enough motion”），会丢掉当前世界原点。
-        // IMU_STEREO 还须等 VIBA 1：InitializeIMU 会 ApplyScaledRotation 拧世界系。
-        // Tag 由 TryInitializeTagMapAfterOrbTracking 在 ORB（及 IMU）稳定后对齐再建。
+        // Do not build the Tag map here. The next frame after StereoInitialization may still ResetActiveMap
+        // (TrackLocalMap failure, or IMU "Not enough motion") and drop the current world origin.
+        // IMU_STEREO must also wait for VIBA 1: InitializeIMU calls ApplyScaledRotation and rotates the world frame.
+        // Tag is aligned and built later by TryInitializeTagMapAfterOrbTracking once ORB (and IMU) are stable.
         Map *pMap = mpAtlas->GetCurrentMap();
 
-        // 用最终 Frame 创建 KF，并加入 ORB Map
+        // Create a KF from the final Frame and insert it into the ORB Map
         KeyFrame* pKFini = new KeyFrame(mCurrentFrame,pMap,mpKeyFrameDB);
         mpAtlas->AddKeyFrame(pKFini);
 
-        // 依赖最终位姿创建双目 MapPoint
-        // 不能用 !mpCamera2 判断——TagFusion 强制加载 Camera2，否则会误走鱼眼分支导致 0 点。
-        // PinHole/Rectified：Frame 走 ComputeStereoMatches，Nleft==-1，深度在 mvDepth。
+        // Create stereo MapPoints from the final pose
+        // Do not branch on !mpCamera2: TagFusion always loads Camera2, and that check would wrongly take the fisheye path and produce 0 points.
+        // PinHole/Rectified: the Frame runs ComputeStereoMatches, Nleft==-1, and depth is in mvDepth.
         if(mCurrentFrame.Nleft == -1){
             for(int i=0; i<mCurrentFrame.N;i++)
             {
@@ -2847,7 +2847,7 @@ void Tracking::StereoInitialization()
                     mCurrentFrame.mvpMapPoints[i]=pNewMP;
                 }
             }
-        // KannalaBrandt 鱼眼双目：Nleft>=0，匹配在 mvLeftToRightMatch / mvStereo3Dpoints。
+        // KannalaBrandt fisheye stereo: Nleft>=0, matches are in mvLeftToRightMatch / mvStereo3Dpoints.
         } else{
             for(int i = 0; i < mCurrentFrame.Nleft; i++){
                 int rightIndex = mCurrentFrame.mvLeftToRightMatch[i];
@@ -2965,7 +2965,7 @@ void Tracking::MonocularInitialization()
                 }
             }
 
-            // 单目暂不接入 Tag 米制初始化；仅使用 ORB 双视图重建 + 中值深度归一化
+            // Monocular does not use Tag metric initialization yet; only ORB two-view reconstruction + median-depth normalization
             mInitialFrame.SetPose(Sophus::SE3f());
             mCurrentFrame.SetPose(Tcw);
 
@@ -3360,7 +3360,7 @@ bool Tracking::TrackWithMotionModel()
             return false;
     }
 
-    // Optimize frame pose with all matches（含 Tag 联合约束）
+    // Optimize frame pose with all matches (including joint Tag constraints)
     OptimizeCurrentPose(true);
 
     // Discard outliers
@@ -3424,7 +3424,7 @@ bool Tracking::TrackLocalMap()
     int inliers;
     if (!mpAtlas->isImuInitialized())
     {
-        // 非惯性：TrackLocalMap 与前两阶段共用 OptimizeCurrentPose(Tag)
+        // Non-inertial: TrackLocalMap shares OptimizeCurrentPose(Tag) with the previous two stages
         OptimizeCurrentPose(true);
     }
     else
@@ -3432,7 +3432,7 @@ bool Tracking::TrackLocalMap()
         if(mCurrentFrame.mnId<=mnLastRelocFrameId+mnFramesToResetIMU)
         {
             Verbose::PrintMess("TLM: PoseOptimization ", Verbose::VERBOSITY_DEBUG);
-            // IMU 重置窗口：暂不接 Tag（与惯性路径一致）
+            // IMU reset window: Tag is not connected yet (same as the inertial path)
             OptimizeCurrentPose(false);
         }
         else
@@ -3441,13 +3441,13 @@ bool Tracking::TrackLocalMap()
             if(!mbMapUpdated) //  && (mnMatchesInliers>30))
             {
                 Verbose::PrintMess("TLM: PoseInertialOptimizationLastFrame ", Verbose::VERBOSITY_DEBUG);
-                if(mTagPoseOptParams.inertial_enable)
+                if(tag_pose_opt_params_.inertial_enable)
                 {
                     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
-                    const auto tagSnap = tag::BuildTagMapSnapshot(
-                        pMap, &mCurrentFrame, mTagPoseOptParams, true);
+                    const auto tagSnap = xreal_tag::BuildTagMapSnapshot(
+                        pMap, &mCurrentFrame, tag_pose_opt_params_, true);
                     inliers = Optimizer::PoseInertialOptimizationLastFrame(
-                        &mCurrentFrame, tagSnap, mTagPoseOptParams);
+                        &mCurrentFrame, tagSnap, tag_pose_opt_params_);
                 }
                 else
                 {
@@ -3457,13 +3457,13 @@ bool Tracking::TrackLocalMap()
             else
             {
                 Verbose::PrintMess("TLM: PoseInertialOptimizationLastKeyFrame ", Verbose::VERBOSITY_DEBUG);
-                if(mTagPoseOptParams.inertial_enable)
+                if(tag_pose_opt_params_.inertial_enable)
                 {
                     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
-                    const auto tagSnap = tag::BuildTagMapSnapshot(
-                        pMap, &mCurrentFrame, mTagPoseOptParams, true);
+                    const auto tagSnap = xreal_tag::BuildTagMapSnapshot(
+                        pMap, &mCurrentFrame, tag_pose_opt_params_, true);
                     inliers = Optimizer::PoseInertialOptimizationLastKeyFrame(
-                        &mCurrentFrame, tagSnap, mTagPoseOptParams);
+                        &mCurrentFrame, tagSnap, tag_pose_opt_params_);
                 }
                 else
                 {
@@ -3653,22 +3653,22 @@ bool Tracking::NeedNewKeyFrame()
     else
         c4=false;
 
-    // Tag：当前帧观测到地图中尚不存在的 Tag ID → 强制关键帧
+    // Tag: the current frame observes a Tag ID that is not in the map yet -> force a keyframe
     bool cTagNew = false;
     Map *pMap = mpAtlas->GetCurrentMap();
-    if(mbTagEnabled && pMap && pMap->IsTagInitialized())
+    if(tag_enabled_ && pMap && pMap->IsTagInitialized())
     {
         std::vector<int> new_tag_ids;
-        auto collectNewTag = [&](const tag::TagObservation &obs) {
+        auto collectNewTag = [&](const xreal_tag::TagObservation &obs) {
             if(!obs.IsDetectValid() || pMap->HasMapTag(obs.tag_id))
                 return;
             if(std::find(new_tag_ids.begin(), new_tag_ids.end(), obs.tag_id) ==
                new_tag_ids.end())
                 new_tag_ids.push_back(obs.tag_id);
         };
-        for(const tag::TagObservation &obs : mCurrentFrame.mTagFrameData.left)
+        for(const xreal_tag::TagObservation &obs : mCurrentFrame.tag_frame_data_.left_)
             collectNewTag(obs);
-        for(const tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
+        for(const xreal_tag::TagObservation &obs : mCurrentFrame.tag_frame_data_.right_)
             collectNewTag(obs);
 
         if(!new_tag_ids.empty())
@@ -3695,11 +3695,11 @@ bool Tracking::NeedNewKeyFrame()
         return false;
 }
 
-bool Tracking::CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResult)
+bool Tracking::CreateNewKeyFrame(const xreal_tag::TagInitializer::Result *tagInitResult)
 {
-    // VIBA 1/2（IsInitializing）期间禁止插 KF。原先仅在第一次 IMU init 时拦截，
-    // VIBA 仍会插帧；InitializeIMU 结尾若 delete 队列 KF，Tracking 的
-    // mpLastKeyFrame 变野指针，end VIBA 2 后立刻 SIGSEGV。
+    // Do not insert KFs during VIBA 1/2 (IsInitializing). Previously this was blocked only on the first IMU init,
+    // so VIBA could still insert frames; if InitializeIMU deletes a queued KF at the end, Tracking's
+    // mpLastKeyFrame becomes a dangling pointer and SIGSEGV follows immediately after VIBA 2 ends.
     if(mpLocalMapper->IsInitializing())
         return false;
 
@@ -3814,12 +3814,12 @@ bool Tracking::CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResul
         }
     }
 
-    // Tag 后初始化：须在 InsertKeyFrame 之前完成 AddKeyFrame + Commit
-    // （CheckMapTagAssociations 要求 KF 已在 Map 的 keyframe set 中）
-    if(tagInitResult && mpTagInitializer && pMap)
+    // Tag post-initialization: AddKeyFrame + Commit must finish before InsertKeyFrame
+    // (CheckMapTagAssociations requires the KF to already be in the Map keyframe set)
+    if(tagInitResult && tag_initializer_ && pMap)
     {
         mpAtlas->AddKeyFrame(pKF);
-        if(mpTagInitializer->CommitTagInitialization(*tagInitResult, pMap, {pKF}))
+        if(tag_initializer_->CommitTagInitialization(*tagInitResult, pMap, {pKF}))
         {
             OnTagMapInitialized(pMap, pKF);
         }
@@ -3843,13 +3843,13 @@ void Tracking::OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF)
     if(!pMap || !pInitKF || !pMap->IsTagInitialized())
         return;
 
-    if(!mpTagTracker)
+    if(!tag_tracker_)
         return;
 
-    mpTagTracker->SeedLastPose(mCurrentFrame.GetPose());
-    mpTagTracker->LogCameraPose(mCurrentFrame);
-    // 初始化 Commit 的 MapTag：在此帧完成首次注册，记录面积/距离/夹角
-    mpTagTracker->LogKeyFrameMapTagFirstRegistrations(pInitKF);
+    tag_tracker_->SeedLastPose(mCurrentFrame.GetPose());
+    tag_tracker_->LogCameraPose(mCurrentFrame);
+    // MapTags committed by initialization finish first registration on this frame; record area/distance/angle
+    tag_tracker_->LogKeyFrameMapTagFirstRegistrations(pInitKF);
 
     std::vector<Eigen::Vector3f> orb_pts;
     const auto vpMPs = mpAtlas->GetAllMapPoints();
@@ -3861,31 +3861,31 @@ void Tracking::OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF)
     }
     std::vector<std::pair<double, Sophus::SE3f>> orb_kf_tcw;
     orb_kf_tcw.emplace_back(pInitKF->mTimeStamp, pInitKF->GetPose());
-    mpTagTracker->SaveInitMaps(*pMap, orb_pts, orb_kf_tcw);
+    tag_tracker_->SaveInitializationMaps(*pMap, orb_pts, orb_kf_tcw);
 }
 
 bool Tracking::TryInitializeTagMapAfterOrbTracking()
 {
     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
 
-    if(!mbTagEnabled ||
-       !mpTagInitializer ||
+    if(!tag_enabled_ ||
+       !tag_initializer_ ||
        !pMap ||
        pMap->IsTagInitialized() ||
        mState != OK ||
        mbOnlyTracking ||
        !mCurrentFrame.isSet() ||
-       mCurrentFrame.mTagFrameData.Empty())
+       mCurrentFrame.tag_frame_data_.IsEmpty())
     {
         return false;
     }
 
-    // 仅双目：已有米制尺度，可用单帧初始化并对齐到 ORB 世界系
+    // Stereo only: metric scale already exists, so a single frame can initialize and align to the ORB world frame
     if(mSensor != System::STEREO && mSensor != System::IMU_STEREO)
         return false;
 
-    // IMU：等 VIBA 1 完成后再 Commit，避免绑到随后被 ResetActiveMap 丢掉的世界；
-    // 也不在 InitializeIMU / ApplyScaledRotation 进行中写入 Tag。
+    // IMU: wait until VIBA 1 finishes before Commit, so the Tag is not bound to a world that ResetActiveMap then drops;
+    // also do not write Tags while InitializeIMU / ApplyScaledRotation is running.
     if(mSensor == System::IMU_STEREO)
     {
         if(!pMap->GetIniertialBA1() ||
@@ -3905,21 +3905,21 @@ bool Tracking::TryInitializeTagMapAfterOrbTracking()
         }
     }
 
-    // 必须先保存 ORB 位姿；禁止用 Tag 结果覆盖当前帧
+    // Save the ORB pose first; do not overwrite the current frame with the Tag result
     const Sophus::SE3f Tcw_orb = mCurrentFrame.GetPose();
 
-    tag::TagInitializer::Result result;
-    if(!mpTagInitializer->TryInitialize(
+    xreal_tag::TagInitializer::Result result;
+    if(!tag_initializer_->TryInitialize(
            mCurrentFrame, mCurrentFrame, result,
-           tag::TagInitializer::InitMode::Stereo))
+           xreal_tag::TagInitializer::InitializationMode::Stereo))
     {
         return false;
     }
 
-    if(!mpTagInitializer->AlignResultToOrbWorld(result, Tcw_orb))
+    if(!tag_initializer_->AlignResultToOrbWorld(result, Tcw_orb))
         return false;
 
-    // CreateNewKeyFrame 内含 LocalMapper 保护；失败则丢弃 Result，下帧重试
+    // CreateNewKeyFrame includes LocalMapper protection; on failure discard the Result and retry on the next frame
     if(!CreateNewKeyFrame(&result))
         return false;
 
@@ -3930,7 +3930,7 @@ bool Tracking::TryInitializeTagMapAfterOrbTracking()
                   << " tags=" << pMap->MapTagsInMap() << std::endl;
     }
 
-    // 本帧已创建关键帧（无论 commit 成败），避免再走普通 NeedNewKeyFrame
+    // This frame already created a keyframe (commit success or failure), so skip the normal NeedNewKeyFrame path
     return true;
 }
 
@@ -4516,10 +4516,10 @@ void Tracking::ResetActiveMap(bool bLocMap)
 
     mbVelocity = false;
 
-    if(mpTagTracker)
+    if(tag_tracker_)
     {
-        mpTagTracker->ClearMotionCache();
-        mpTagTracker->ResetExports();
+        tag_tracker_->ClearMotionCache();
+        tag_tracker_->ResetExports();
     }
 
     if(mbSaveOnlinePose)
@@ -4681,27 +4681,27 @@ int Tracking::GetMatchesInliers()
 void Tracking::SaveTagExports()
 {
 #ifdef HAS_APRILTAG
-    if(mpTagViewer)
-        mpTagViewer->RequestFinish();
+    if(tag_viewer_)
+        tag_viewer_->RequestFinish();
 #endif
     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
-    if(mpTagTracker && pMap)
-        mpTagTracker->SaveExports(*pMap);
+    if(tag_tracker_ && pMap)
+        tag_tracker_->SaveExports(*pMap);
 }
 
 void Tracking::SaveTagMapOnline()
 {
     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
-    if(mpTagTracker && pMap)
-        mpTagTracker->SaveTagMapOnline(*pMap);
+    if(tag_tracker_ && pMap)
+        tag_tracker_->SaveTagMapOnline(*pMap);
 }
 
 void Tracking::LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id,
                                           int left_idx, int right_idx,
-                                          tag::MapTagData *pTag)
+                                          xreal_tag::MapTagData *pTag)
 {
-    if(mpTagTracker)
-        mpTagTracker->LogMapTagFirstRegistration(pKF, tag_id, left_idx,
+    if(tag_tracker_)
+        tag_tracker_->LogMapTagFirstRegistration(pKF, tag_id, left_idx,
                                                  right_idx, pTag);
 }
 
@@ -4721,8 +4721,8 @@ void Tracking::SaveSubTrajectory(string strNameFile_frames, string strNameFile_k
 double Tracking::GetConfiguredTagSize(int tag_id) const
 {
 #ifdef HAS_APRILTAG
-    if(mpAprilTagDetector)
-        return mpAprilTagDetector->GetTagSize(tag_id);
+    if(april_tag_detector_)
+        return april_tag_detector_->GetTagSize(tag_id);
 #endif
     (void)tag_id;
     return 0.16;
@@ -4730,8 +4730,8 @@ double Tracking::GetConfiguredTagSize(int tag_id) const
 
 void Tracking::ShowOfflineImshowWindows()
 {
-    // 由 Tag.show_in_orb_viewer 控制；在 Track() 内同步调用，不另开 Viewer 线程
-    if(!mbTagShowInOrbViewer || !mpFrameDrawer)
+    // Controlled by Tag.show_in_orb_viewer; called synchronously inside Track(), without starting another Viewer thread
+    if(!tag_show_in_orb_viewer_ || !mpFrameDrawer)
         return;
 
     const float imageScale = GetImageScale();

@@ -44,9 +44,9 @@ ORBextractor.minThFAST: 7
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------
-# Viewer.enable: 有则覆盖 System 构造参数；原先默认开启
+# Viewer.enable: overrides the System ctor arg when set; formerly on by default
 Viewer.enable: 1
-# 原先默认 KeyFrameSize=0.05, CameraSize=0.08（归一化尺度）；Tag 米制下建议缩小
+# Former defaults KeyFrameSize=0.05, CameraSize=0.08 (normalized scale); shrink under metric Tags
 Viewer.KeyFrameSize: 0.01
 Viewer.KeyFrameLineWidth: 1.0
 Viewer.GraphLineWidth: 0.9
@@ -80,8 +80,8 @@ Tag.export: 1
 Tag.export_dir: "tag_export_penncosyvio"
 Tag.viewer: 1
 
-# ========================== local BA配置 ==========================
-Tag.pose_optimization: 1   # 纯视觉 PoseOptimization 与惯性 PoseInertial* 共用（运行时只走当前传感器对应的一条分支）
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
 Tag.fixed_only: 1
@@ -91,30 +91,30 @@ Tag.local_ba.corner_sigma: 2.0
 Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1
 
-# ========================== 角点因子自适应权重配置 ==========================
+# ========================== adaptive corner-factor weights ==========================
 Tag.factor_weight.enable: 0
-Tag.factor_weight.alpha: 3.0          # Tag / feature 基础权重比
-Tag.factor_weight.s_sat: 400.0        # 基本满权面积 px^2
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
 Tag.factor_weight.lambda_s: 3.0
-Tag.factor_weight.theta0_deg: 60.0    # 视角特征尺度
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
 Tag.factor_weight.lambda_theta: 1.0
-Tag.factor_weight.phi0_deg: 15.0      # IPPE 双解显著旋转差
-Tag.factor_weight.e0: 1.0             # 双解 residual 区分尺度 px
-Tag.factor_weight.lambda_amb: 0.0         # 0=关闭双解项（w_amb≡1）
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
 Tag.factor_weight.w_min: 0.001
-Tag.factor_weight.verbose: 0          # 1=打印 S,θ,Δφ,Δe 与各分项权重
+Tag.factor_weight.verbose: 0          # 1=print S, theta, delta-phi, delta-e and per-term weights
 
-# ========================== 回环配置 ==========================
+# ========================== loop closure ==========================
 Tag.loop.enable: 1
 Tag.loop.min_history_observations: 2
-Tag.loop.min_keyframe_gap: 30 # 历史回环 KF 与当前 KF 的最小 ID 间隔
-Tag.loop.min_reobservation_gap_kfs: 30 # 最近一次有效观测间隔；过小视为连续可见，不是重新观察
-Tag.loop.min_historical_kf_map_points: 20 # 历史 KF 至少需有这么多跟踪地图点
-Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE解的重投影误差阈值
-Tag.loop.max_stereo_translation_error: 0.20 # 左右目当前相机位姿的位移差阈值
-Tag.loop.max_stereo_rotation_error: 0.20 # 左右目当前相机位姿旋转差阈值
-Tag.loop.max_roll_pitch_correction: 0.15 # Sim3修正的roll和pitch差阈值
-Tag.loop.max_yaw_correction: 1.57 # Sim3修正的yaw差阈值
-Tag.loop.min_consistent_tags: 1 # 至少需要多少个一致的Tag才能认为存在回环
-Tag.loop.reference_timeout_kfs: 4 # 连续若干 KF 未见该 Tag 则清除冻结回环参考
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.15 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
 Tag.loop.verbose: 1

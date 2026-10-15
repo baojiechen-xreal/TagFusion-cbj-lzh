@@ -15,57 +15,57 @@ namespace ORB_SLAM3 {
 class KeyFrame;
 class Map;
 
-namespace tag {
+namespace xreal_tag {
 
-// MapTag 生命周期状态（转换逻辑后续阶段实现）
+// MapTag lifecycle state (transition logic is implemented in a later stage)
 enum class MapTagState : std::uint8_t
 {
-    CANDIDATE = 0,   // 刚创建，观测不足 / 未消歧
-    ACTIVE,          // 系统自建 Tag，世界位姿可优化（含初始化阶段）
-    FIXED_ANCHOR,    // 仅外部可信世界位姿（测量/标定/加载的 Tag map）
-    BAD              // 已失效，等待从 Map 移除
+    CANDIDATE = 0,   // Just created; observations are insufficient / not yet disambiguated
+    ACTIVE,          // Tag created by the system; world pose is optimizable (including initialization)
+    FIXED_ANCHOR,    // External trusted world pose only (surveyed, calibrated, or loaded Tag map)
+    BAD              // Invalid; waiting to be removed from the Map
 };
 
 /**
- * Map 中的单个 Tag 实体。
+ * A single Tag entity in the Map.
  *
- * 所有权（勿违反销毁顺序：先断 KF↔MapTag，再释放 Map 中的 shared_ptr）：
- *   Map                -> shared_ptr<MapTagData>   唯一持久化所有者
- *   KeyFrame           -> MapTagData*              非拥有
- *   MapTagData::mpMap  -> Map*                     非拥有
- *   MapTagData 观测    -> KeyFrame*                非拥有
+ * Ownership (do not violate destruction order: unlink KF<->MapTag first, then release the shared_ptr held by the Map):
+ *   Map                -> shared_ptr<MapTagData>   sole persistent owner
+ *   KeyFrame           -> MapTagData*              non-owning
+ *   MapTagData::map_  -> Map*                     non-owning
+ *   MapTagData observations -> KeyFrame*          non-owning
  *
- * 唯一角点测量源：KeyFrame::mTagFrameData（本类只存左右观测索引）。
+ * Sole source of corner measurements: KeyFrame::tag_frame_data_ (this class stores only the left/right observation indices).
  */
 class MapTagData
 {
 public:
     struct KeyFrameObservation
     {
-        int leftIndex = -1;
-        int rightIndex = -1;
+        int left_index = -1;
+        int right_index = -1;
     };
 
     using KeyFrameObservations = std::map<KeyFrame *, KeyFrameObservation>;
 
     MapTagData() = default;
 
-    int Id() const;
+    int GetId() const;
     void SetId(int id);
 
     float GetTagSize() const;
     void SetTagSize(float tag_size);
 
-    void SetPose(const Sophus::SE3f &T_wt);
+    void SetPose(const Sophus::SE3f &t_wt);
     Sophus::SE3f GetPose() const;
     bool HasPose() const;
 
-    // 首次赋位姿时冻结的未选中 IPPE 镜像解（世界系 T_wt）；LBA 不更新
-    void SetMirrorPose(const Sophus::SE3f &T_wt);
+    // Unselected IPPE mirror solution frozen when the pose is first assigned (world-frame T_wt); LBA does not update it
+    void SetMirrorPose(const Sophus::SE3f &t_wt);
     Sophus::SE3f GetMirrorPose() const;
     bool HasMirrorPose() const;
 
-    // 按需计算：P_w = T_wt * P_t（需已有 pose 且 tag_size > 0）
+    // Computed on demand: P_w = T_wt * P_t (requires an existing pose and tag_size > 0)
     std::array<Eigen::Vector3f, 4> GetWorldCorners() const;
     bool HasWorldCorners() const;
     std::array<Eigen::Vector3f, 4> GetMirrorWorldCorners() const;
@@ -78,12 +78,12 @@ public:
 
     Map *GetMap() const;
 
-    bool IsInKeyFrame(KeyFrame *pKF) const;
+    bool IsInKeyFrame(KeyFrame *key_frame) const;
     KeyFrameObservations GetObservations() const;
-    std::size_t Observations() const;
-    bool Empty() const { return Observations() == 0; }
+    std::size_t GetObservationCount() const;
+    bool IsEmpty() const { return GetObservationCount() == 0; }
 
-    // 导出 / 在线覆盖时写入：供 Pangolin 在 Tag 上显示 mean w_bar
+    // Written on export / online overwrite so Pangolin can show mean w_bar on the Tag
     struct FactorVizWeight
     {
         bool valid = false;
@@ -101,48 +101,48 @@ public:
     void SetFactorVizWeight(const FactorVizWeight &w);
     FactorVizWeight GetFactorVizWeight() const;
 
-    // 分层选择参考观测 KF；无合格观测返回 nullptr。
-    // allow_unresolved_fallback: 全部历史观测未消歧时是否允许回退；回环锚点应传 false。
+    // Select the reference observation KF by layers; returns nullptr when none qualifies.
+    // allow_unresolved_fallback: whether to fall back when every historical observation is unresolved; loop anchors should pass false.
     KeyFrame *SelectReferenceKeyFrame(int min_inlier_corners = 3,
                                       bool allow_unresolved_fallback = true) const;
 
-    // Loop closing / GBA 暂存（对齐 MapPoint，不加锁）
-    unsigned long mnCorrectedByKF = 0;
-    unsigned long mnCorrectedReference = 0;
-    Sophus::SE3f mTwtGBA;
-    unsigned long mnBAGlobalForKF = 0;
+    // Loop-closing / GBA scratch (aligned with MapPoint; not locked)
+    unsigned long corrected_by_key_frame_ = 0;
+    unsigned long corrected_reference_ = 0;
+    Sophus::SE3f twt_gba_;
+    unsigned long bundle_adjustment_global_for_key_frame_ = 0;
 
 private:
     friend class ORB_SLAM3::KeyFrame;
     friend class ORB_SLAM3::Map;
 
-    void AddObservationInternal(KeyFrame *pKF, int leftIndex, int rightIndex);
-    void EraseObservationInternal(KeyFrame *pKF);
-    void SetMapInternal(Map *pMap);
+    void AddObservationInternal(KeyFrame *key_frame, int left_index, int right_index);
+    void EraseObservationInternal(KeyFrame *key_frame);
+    void SetMapInternal(Map *map);
 
-    // mMutexPose: mTwt / mbHasPose / mTwtMirror / mbHasMirrorPose / mTagSize
-    mutable std::mutex mMutexPose;
-    // mMutexFeatures: mObservations / mState / mFactorVizWeight；mpMap 由 Map 在持有 Map 锁时写入
-    mutable std::mutex mMutexFeatures;
+    // mutex_pose_: twt_ / has_pose_ / twt_mirror_ / has_mirror_pose_ / tag_size_
+    mutable std::mutex mutex_pose_;
+    // mutex_features_: observations_ / state_ / factor_viz_weight_; map_ is written by Map while the Map lock is held
+    mutable std::mutex mutex_features_;
 
-    int mnId = -1;
-    float mTagSize = 0.0f;
+    int id_ = -1;
+    float tag_size_ = 0.0f;
 
-    Sophus::SE3f mTwt;
-    bool mbHasPose = false;
+    Sophus::SE3f twt_;
+    bool has_pose_ = false;
 
-    Sophus::SE3f mTwtMirror;
-    bool mbHasMirrorPose = false;
+    Sophus::SE3f twt_mirror_;
+    bool has_mirror_pose_ = false;
 
-    MapTagState mState = MapTagState::CANDIDATE;
-    KeyFrameObservations mObservations;
+    MapTagState state_ = MapTagState::CANDIDATE;
+    KeyFrameObservations observations_;
 
-    FactorVizWeight mFactorVizWeight;
+    FactorVizWeight factor_viz_weight_;
 
-    Map *mpMap = nullptr;
+    Map *map_ = nullptr;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif
