@@ -9,10 +9,10 @@
 
 namespace ORB_SLAM3
 {
-namespace tag
+namespace xreal_tag
 {
 
-// 将每帧各 Tag 的位姿字段写入 CSV（一行一个 tag）
+// Write the pose fields of each Tag in every frame to CSV (one row per tag)
 class TagPoseLogger
 {
 public:
@@ -24,19 +24,19 @@ public:
 
     bool IsOpen() const { return file_.is_open(); }
 
-    // 记录一帧中所有 Tag 的 pose；无检测也可调用（不写行）
+    // Record the pose of every Tag in one frame; safe to call when nothing was detected (writes no row)
     void LogFrame(size_t frame_id,
                   double timestamp,
-                  const std::vector<tag::TagObservation> &tags);
+                  const std::vector<xreal_tag::TagObservation> &tags);
 
 private:
     void WriteHeader();
-    void WriteCandidate(const tag::TagPoseCandidate &cand, bool valid);
+    void WriteCandidate(const xreal_tag::TagPoseCandidate &cand, bool valid);
 
     std::ofstream file_;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

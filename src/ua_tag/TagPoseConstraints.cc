@@ -15,7 +15,7 @@
 #include <opencv2/core.hpp>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 bool ModuleEnabledFromSettings(const std::string &settings_path)
 {
@@ -112,25 +112,25 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
 {
     TagFactorWeight w;
 
-    w.area = std::max(0.0f, obs.observed_area_);
+    w.area = std::max(0.0f, obs.observed_area);
     const float s_sat = std::max(params.s_sat, 1e-6f);
     const float xs = w.area / s_sat;
     w.w_s = Clamp01(1.0f - std::exp(-params.lambda_s * xs * xs));
 
     const TagPoseCandidate *pose_src = nullptr;
-    if(obs.pose_estimate_.has_value())
+    if(obs.pose_estimate.has_value())
     {
-        pose_src = obs.pose_estimate_->GetSelectedCandidate();
+        pose_src = obs.pose_estimate->GetSelectedCandidate();
         if(!pose_src)
         {
             float best_err = std::numeric_limits<float>::infinity();
-            for(const TagPoseCandidate &c : obs.pose_estimate_->candidates_)
+            for(const TagPoseCandidate &c : obs.pose_estimate->candidates)
             {
-                if(!c.valid_)
+                if(!c.valid)
                     continue;
-                if(c.reprojection_error_ >= 0.0f && c.reprojection_error_ < best_err)
+                if(c.reprojection_error >= 0.0f && c.reprojection_error < best_err)
                 {
-                    best_err = c.reprojection_error_;
+                    best_err = c.reprojection_error;
                     pose_src = &c;
                 }
             }
@@ -138,7 +138,7 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
     }
     if(pose_src)
     {
-        Eigen::Vector3f n = pose_src->t_ct_.rotationMatrix().col(2);
+        Eigen::Vector3f n = pose_src->t_ct.rotationMatrix().col(2);
         const float n_norm = n.norm();
         if(n_norm > 1e-8f)
         {
@@ -152,18 +152,18 @@ TagFactorWeight EvaluateTagFactorWeight(const TagObservation &obs,
         }
     }
 
-    if(obs.pose_estimate_.has_value())
+    if(obs.pose_estimate.has_value())
     {
-        const TagPoseCandidate &c0 = obs.pose_estimate_->candidates_[0];
-        const TagPoseCandidate &c1 = obs.pose_estimate_->candidates_[1];
-        if(c0.valid_ && c1.valid_)
+        const TagPoseCandidate &c0 = obs.pose_estimate->candidates[0];
+        const TagPoseCandidate &c1 = obs.pose_estimate->candidates[1];
+        if(c0.valid && c1.valid)
         {
-            const Eigen::Matrix3f R1 = c0.t_ct_.rotationMatrix();
-            const Eigen::Matrix3f R2 = c1.t_ct_.rotationMatrix();
+            const Eigen::Matrix3f R1 = c0.t_ct.rotationMatrix();
+            const Eigen::Matrix3f R2 = c1.t_ct.rotationMatrix();
             const float tr = (R1.transpose() * R2).trace();
             const float c = std::min(1.0f, std::max(-1.0f, 0.5f * (tr - 1.0f)));
             w.dphi_rad = std::acos(c);
-            w.de = std::abs(c0.reprojection_error_ - c1.reprojection_error_);
+            w.de = std::abs(c0.reprojection_error - c1.reprojection_error);
             w.has_amb = true;
             const float phi0 = std::max(params.phi0_deg * kDeg2Rad, 1e-6f);
             const float e0 = std::max(params.e0, 1e-6f);
@@ -218,12 +218,12 @@ TagFactorWeightSummary SummarizeMapTagFactorWeight(
         if(!pKF || pKF->isBad())
             continue;
         const MapTagData::KeyFrameObservation &idx = kv.second;
-        if(idx.left_index_ >= 0 &&
-           idx.left_index_ < static_cast<int>(pKF->tag_frame_data_.left_.size()))
-            consider(&pKF->tag_frame_data_.left_[static_cast<std::size_t>(idx.left_index_)]);
-        if(idx.right_index_ >= 0 &&
-           idx.right_index_ < static_cast<int>(pKF->tag_frame_data_.right_.size()))
-            consider(&pKF->tag_frame_data_.right_[static_cast<std::size_t>(idx.right_index_)]);
+        if(idx.left_index >= 0 &&
+           idx.left_index < static_cast<int>(pKF->tag_frame_data_.left_.size()))
+            consider(&pKF->tag_frame_data_.left_[static_cast<std::size_t>(idx.left_index)]);
+        if(idx.right_index >= 0 &&
+           idx.right_index < static_cast<int>(pKF->tag_frame_data_.right_.size()))
+            consider(&pKF->tag_frame_data_.right_[static_cast<std::size_t>(idx.right_index)]);
     }
 
     if(n <= 0)
@@ -261,8 +261,8 @@ Eigen::Matrix2d TagCornerInformation(float corner_sigma,
         constexpr float kRad2Deg = 57.29577951308232f;
         std::cout << "[TagW] src=" << log_src
                   << " id=" << log_id
-                  << " tag=" << obs.tag_id_
-                  << " cam=" << CameraName(obs.camera_id_)
+                  << " tag=" << obs.tag_id
+                  << " cam=" << CameraName(obs.camera_id)
                   << " S=" << w.area
                   << " theta_deg=" << (w.has_theta ? w.theta_rad * kRad2Deg : -1.0f)
                   << " dphi_deg=" << (w.has_amb ? w.dphi_rad * kRad2Deg : -1.0f)
@@ -295,7 +295,7 @@ TagPoseOptParams TagPoseOptParams::FromSettings(const std::string &settings_path
         params.inertial_enable = params.enable;
     }
 
-    // 兼容旧 yaml：仅写了 inertial 键时仍生效；与 pose_optimization 同时存在则以 pose_optimization 为准
+    // Legacy yaml: still applies when only the inertial key is set; if pose_optimization is also present, pose_optimization wins
     node = fs["Tag.inertial_pose_optimization"];
     if(!node.empty() && fs["Tag.pose_optimization"].empty())
         params.inertial_enable = static_cast<int>(node) != 0;
@@ -452,7 +452,7 @@ namespace {
 
 bool ObservationEligible(const TagObservation &obs)
 {
-    // 仅看检测有效性；优化外点不得阻止同帧再次加入约束
+    // Look only at detection validity; an optimization outlier must not stop the same frame from adding the constraint again
     return obs.IsDetectValid();
 }
 
@@ -465,12 +465,12 @@ bool CollectNeededTagIds(const Frame *pFrame, std::unordered_set<int> &ids)
     for(const TagObservation &obs : pFrame->tag_frame_data_.left_)
     {
         if(ObservationEligible(obs))
-            ids.insert(obs.tag_id_);
+            ids.insert(obs.tag_id);
     }
     for(const TagObservation &obs : pFrame->tag_frame_data_.right_)
     {
         if(ObservationEligible(obs))
-            ids.insert(obs.tag_id_);
+            ids.insert(obs.tag_id);
     }
     return !ids.empty();
 }
@@ -527,5 +527,5 @@ std::vector<TagPoseConstraint> BuildTagMapSnapshot(
     return out;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

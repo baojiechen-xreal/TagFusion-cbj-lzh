@@ -407,7 +407,7 @@ void MapDrawer::DrawTagMap(const bool bDrawTags, const bool bDrawTagKFs)
 
     if(bDrawTags)
     {
-        // 边颜色与 TagViewer / AprilTagVisualizer 一致：绿 / 黄 / 橙 / 蓝
+        // Edge colors match TagViewer / AprilTagVisualizer: green / yellow / orange / blue
         const float edge_rgb[4][3] = {
             {0.0f, 1.0f, 0.0f},
             {1.0f, 1.0f, 0.0f},
@@ -473,7 +473,7 @@ void MapDrawer::DrawTagMap(const bool bDrawTags, const bool bDrawTagKFs)
                 glPopMatrix();
             }
 
-            // Tag ID 文字
+            // Tag ID text
             Eigen::Vector3f center = Eigen::Vector3f::Zero();
             bool has_center = false;
             if(map_tag->HasWorldCorners())

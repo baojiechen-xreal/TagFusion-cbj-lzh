@@ -48,4 +48,5 @@ elif [[ -f "${HOME}/Pangolin/build/src/PangolinConfig.cmake" ]]; then
   PANGOLIN_CMAKE_ARGS+=(-DPangolin_DIR="${HOME}/Pangolin/build/src")
 fi
 cmake .. -DCMAKE_BUILD_TYPE=Release "${PANGOLIN_CMAKE_ARGS[@]}"
-make -j32
+JOBS="${JOBS:-$(nproc)}"
+make -j"${JOBS}"

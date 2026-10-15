@@ -10,13 +10,13 @@
 
 namespace ORB_SLAM3
 {
-namespace tag
+namespace xreal_tag
 {
 
 namespace
 {
 
-void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
+void DrawObservations(cv::Mat &vis, const xreal_tag::TagFrameData::Observations &tags,
                       float imageScale = 1.f)
 {
     const cv::Scalar edgeColors[4] = {
@@ -29,10 +29,10 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
 
     for(size_t i = 0; i < tags.size(); ++i)
     {
-        const tag::TagObservation &tag = tags[i];
+        const xreal_tag::TagObservation &tag = tags[i];
         cv::Point2f corners[4];
         for(int k = 0; k < 4; ++k)
-            corners[k] = tag.corners_raw_[k] * invScale;
+            corners[k] = tag.corners_raw[k] * invScale;
 
         for(int k = 0; k < 4; ++k)
         {
@@ -47,20 +47,20 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
             center += corners[k];
         center *= 0.25f;
 
-        // v: 位姿有效；a: 歧义已消解
-        const bool has_pose = tag.pose_estimate_.has_value();
-        const tag::TagPoseCandidate *selected =
-            has_pose ? tag.pose_estimate_->GetSelectedCandidate() : nullptr;
+        // v: pose valid; a: ambiguity resolved
+        const bool has_pose = tag.pose_estimate.has_value();
+        const xreal_tag::TagPoseCandidate *selected =
+            has_pose ? tag.pose_estimate->GetSelectedCandidate() : nullptr;
         const int valid = selected ? 1 : 0;
         const int amb_resolved =
-            (has_pose && tag.pose_estimate_->selected_candidate_ >= 0) ? 1 : 0;
+            (has_pose && tag.pose_estimate->selected_candidate >= 0) ? 1 : 0;
 
         char line1[32];
         char line2[32];
-        std::snprintf(line1, sizeof(line1), "id:%d", tag.tag_id_);
+        std::snprintf(line1, sizeof(line1), "id:%d", tag.tag_id);
         std::snprintf(line2, sizeof(line2), "v:%d a:%d", valid, amb_resolved);
 
-        // 有效：蓝；无效：红（BGR）
+        // Valid: blue; invalid: red (BGR)
         const cv::Scalar textColor = valid ? cv::Scalar(255, 64, 0) : cv::Scalar(0, 0, 255);
         cv::putText(vis, line1, center + cv::Point2f(4.f, -8.f),
                     cv::FONT_HERSHEY_SIMPLEX, 0.55, textColor, 2, cv::LINE_AA);
@@ -108,40 +108,40 @@ bool EnsureDir(const std::string &dirPath)
     return mkdir(dirPath.c_str(), 0755) == 0;
 }
 
-cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
-                 tag::CameraId camera_id)
+cv::Mat DrawTags(const cv::Mat &image, const xreal_tag::TagFrameData &frame_data,
+                 xreal_tag::CameraId camera_id)
 {
     cv::Mat vis = ToBgrClone(image);
     if(vis.empty())
         return vis;
 
-    if(camera_id == tag::CameraId::RIGHT)
+    if(camera_id == xreal_tag::CameraId::RIGHT)
         DrawObservations(vis, frame_data.right_);
     else
         DrawObservations(vis, frame_data.left_);
     return vis;
 }
 
-void OverlayTags(cv::Mat &image, const tag::TagFrameData &frame_data,
-                 tag::CameraId camera_id, float imageScale)
+void OverlayTags(cv::Mat &image, const xreal_tag::TagFrameData &frame_data,
+                 xreal_tag::CameraId camera_id, float imageScale)
 {
     if(image.empty())
         return;
-    if(camera_id == tag::CameraId::RIGHT)
+    if(camera_id == xreal_tag::CameraId::RIGHT)
         DrawObservations(image, frame_data.right_, imageScale);
     else
         DrawObservations(image, frame_data.left_, imageScale);
 }
 
 cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
-                       const tag::TagFrameData &frame_data)
+                       const xreal_tag::TagFrameData &frame_data)
 {
-    cv::Mat left = DrawTags(imLeft, frame_data, tag::CameraId::LEFT_OR_MONO);
-    cv::Mat right = DrawTags(imRight, frame_data, tag::CameraId::RIGHT);
+    cv::Mat left = DrawTags(imLeft, frame_data, xreal_tag::CameraId::LEFT_OR_MONO);
+    cv::Mat right = DrawTags(imRight, frame_data, xreal_tag::CameraId::RIGHT);
     if(left.empty() || right.empty())
         return cv::Mat();
 
-    // 对齐高度后水平拼接
+    // Concatenate horizontally after aligning the heights
     if(left.rows != right.rows)
     {
         const int h = std::max(left.rows, right.rows);
@@ -166,13 +166,13 @@ cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
 }
 
 bool SaveTagsVis(const cv::Mat &image,
-                 const tag::TagFrameData &frame_data,
+                 const xreal_tag::TagFrameData &frame_data,
                  const std::string &savePath)
 {
     if(savePath.empty() || image.empty())
         return false;
 
-    cv::Mat vis = DrawTags(image, frame_data, tag::CameraId::LEFT_OR_MONO);
+    cv::Mat vis = DrawTags(image, frame_data, xreal_tag::CameraId::LEFT_OR_MONO);
     if(vis.empty())
         return false;
 
@@ -180,7 +180,7 @@ bool SaveTagsVis(const cv::Mat &image,
 }
 
 bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
-                 const tag::TagFrameData &frame_data,
+                 const xreal_tag::TagFrameData &frame_data,
                  const std::string &savePath)
 {
     if(savePath.empty() || imLeft.empty() || imRight.empty())
@@ -193,5 +193,5 @@ bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
     return cv::imwrite(savePath, vis);
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

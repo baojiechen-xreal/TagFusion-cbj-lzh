@@ -54,33 +54,33 @@ public:
                                  const bool bRobust = true, const bool bFixBaseline = false);
     void static GlobalBundleAdjustemnt(Map* pMap, int nIterations=5, bool *pbStopFlag=NULL,
                                        const unsigned long nLoopKF=0, const bool bRobust = true);
-    // 单目初始化 BA：薄封装，固定两帧位姿（从而固定基线长度），只优化地图点
+    // Monocular initialization BA: a thin wrapper that fixes both frame poses (and thus the baseline length) and optimizes map points only
     void static GlobalBundleAdjustmentInit(Map* pMap, int nIterations=5, bool *pbStopFlag=NULL,
                                            const unsigned long nLoopKF=0, const bool bRobust = true);
     void static FullInertialBA(Map *pMap, int its, const bool bFixLocal=false, const unsigned long nLoopKF=0, bool *pbStopFlag=NULL, bool bInit=false, float priorG = 1e2, float priorA=1e6, Eigen::VectorXd *vSingVal = NULL, bool *bHess=NULL,
-                               const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
+                               const xreal_tag::TagLocalBAParams &tagParams = xreal_tag::TagLocalBAParams(),
                                int fixedLoopTagId = -1);
 
     void static LocalBundleAdjustment(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges,
-                                      const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
-                                      tag::TagLocalBAStats *tagStats = nullptr);
+                                      const xreal_tag::TagLocalBAParams &tagParams = xreal_tag::TagLocalBAParams(),
+                                      xreal_tag::TagLocalBAStats *tagStats = nullptr);
 
     int static PoseOptimization(Frame* pFrame);
-    // ORB MapPoint + Tag 角点联合位姿优化；返回值仍仅为 ORB MapPoint 内点数
+    // Joint pose optimization of ORB MapPoints and Tag corners; the return value is still only the ORB MapPoint inlier count
     int static PoseOptimization(Frame* pFrame,
-                                const std::vector<tag::TagPoseConstraint> &tagConstraints,
-                                const tag::TagPoseOptParams &tagParams);
+                                const std::vector<xreal_tag::TagPoseConstraint> &tagConstraints,
+                                const xreal_tag::TagPoseOptParams &tagParams);
     int static PoseInertialOptimizationLastKeyFrame(Frame* pFrame, bool bRecInit = false);
     int static PoseInertialOptimizationLastKeyFrame(
         Frame* pFrame,
-        const std::vector<tag::TagPoseConstraint> &tagConstraints,
-        const tag::TagPoseOptParams &tagParams,
+        const std::vector<xreal_tag::TagPoseConstraint> &tagConstraints,
+        const xreal_tag::TagPoseOptParams &tagParams,
         bool bRecInit = false);
     int static PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit = false);
     int static PoseInertialOptimizationLastFrame(
         Frame *pFrame,
-        const std::vector<tag::TagPoseConstraint> &tagConstraints,
-        const tag::TagPoseOptParams &tagParams,
+        const std::vector<xreal_tag::TagPoseConstraint> &tagConstraints,
+        const xreal_tag::TagPoseOptParams &tagParams,
         bool bRecInit = false);
 
     // if bFixScale is true, 6DoF optimization (stereo,rgbd), 7DoF otherwise (mono)
@@ -89,7 +89,7 @@ public:
                                        const LoopClosing::KeyFrameAndPose &CorrectedSim3,
                                        const map<KeyFrame *, set<KeyFrame *> > &LoopConnections,
                                        const bool &bFixScale,
-                                       tag::MapTagData *pLoopAnchorTag = nullptr);
+                                       xreal_tag::MapTagData *pLoopAnchorTag = nullptr);
     void static OptimizeEssentialGraph(KeyFrame* pCurKF, vector<KeyFrame*> &vpFixedKFs, vector<KeyFrame*> &vpFixedCorrectedKFs,
                                        vector<KeyFrame*> &vpNonFixedKFs, vector<MapPoint*> &vpNonCorrectedMPs);
 
@@ -107,24 +107,24 @@ public:
         std::vector<int> outlierTagIds;
     };
 
-    // Tag 回环 4DoF pose-only（当前 KF 单顶点 yaw+xyz，不引入 ORB）：
-    // 两轮 Huber（各 10 次）→ 组级剔除（每相机≥3 角点内点，或左右合计≥6；Tag RMSE≤5px）
-    // → 至少 2 个内点 Tag 才返回成功，否则不提交回环。
+    // Tag loop 4DoF pose-only (single vertex yaw+xyz on the current KF, ORB is not added):
+    // two Huber rounds (10 iterations each) -> group rejection (>=3 inlier corners per camera, or >=6 across left and right; Tag RMSE<=5px)
+    // -> return success only when at least 2 Tags are inliers; otherwise do not commit the loop.
     static bool OptimizeTagLoopPose4DoF(
         KeyFrame *pCurrentKF,
-        const std::vector<tag::TagPoseConstraint> &constraints,
+        const std::vector<xreal_tag::TagPoseConstraint> &constraints,
         const Sophus::SE3f &seedTcw,
         Sophus::SE3f &refinedTcw,
         TagLoopPoseOptStats *stats = nullptr,
         float cornerSigma = 2.0f,
-        const tag::TagFactorWeightParams &factorWeight = tag::TagFactorWeightParams());
+        const xreal_tag::TagFactorWeightParams &factorWeight = xreal_tag::TagFactorWeightParams());
 
     // For inertial loopclosing
     void static OptimizeEssentialGraph4DoF(Map* pMap, KeyFrame* pLoopKF, KeyFrame* pCurKF,
                                        const LoopClosing::KeyFrameAndPose &NonCorrectedSim3,
                                        const LoopClosing::KeyFrameAndPose &CorrectedSim3,
                                        const map<KeyFrame *, set<KeyFrame *> > &LoopConnections,
-                                       tag::MapTagData *pLoopAnchorTag = nullptr);
+                                       xreal_tag::MapTagData *pLoopAnchorTag = nullptr);
 
 
     // if bFixScale is true, optimize SE3 (stereo,rgbd), Sim3 otherwise (mono) (NEW)
@@ -135,8 +135,8 @@ public:
     // For inertial systems
 
     void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge = false, bool bRecInit = false,
-                               const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
-                               tag::TagLocalBAStats *tagStats = nullptr);
+                               const xreal_tag::TagLocalBAParams &tagParams = xreal_tag::TagLocalBAParams(),
+                               xreal_tag::TagLocalBAStats *tagStats = nullptr);
     void static MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbStopFlag, Map *pMap, LoopClosing::KeyFrameAndPose &corrPoses);
 
     // Local BA in welding area when two maps are merged

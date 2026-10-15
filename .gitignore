@@ -51,6 +51,10 @@ OnlineCameraTrajectory*.txt
 Examples/TagFusion/**/f_*.txt
 Examples/TagFusion/**/kf_*.txt
 
+# Undated local glass configs. Dated datasets use 2026MMDD_stereo+imu.yaml.
+Examples/TagFusion/XREAL_Glass/q3hy.yaml
+Examples/TagFusion/XREAL_Glass/q3hy_stereo+imu.yaml
+
 # ===================== Misc =====================
 /review/
 Untitled

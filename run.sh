@@ -1,35 +1,37 @@
 #!/usr/bin/env bash
-# 批量跑 q3hy OptiTrack 序列（双目+IMU）。
-# 估计轨迹是相机系 Twc。评测前固定做 Twb = Twc * inv(IMU.T_b_c1)，再对 imu_pose.txt 做 evo APE。
+# Batch-run q3hy OptiTrack sequences (stereo + IMU).
+# Estimated poses are camera-frame Twc. Before evo, convert with
+# Twb = Twc * inv(IMU.T_b_c1), then score APE against imu_pose.txt.
 #
-# 用法:
+# Usage:
 #   ./run.sh
-#       评测 20260807 与 20260819 下所有含 raw_data/glass 的序列（含 bad_*）。
+#       Evaluate every sequence under 20260807 and 20260819 that has raw_data/glass (including bad_*).
 #   ./run.sh /path/to/raw_data/glass [traj_name]
-#       只跑一条。日期从路径里的 /20260807/ 或 /20260819/ 判断，用来选标定 yaml。
+#       Run one sequence. The date in the path (/20260807/ or /20260819/) selects the yaml.
 #
-# 环境变量（均可选）:
-#   SETTINGS     覆盖自动选择的标定 yaml
-#   GT           单序列模式下的真值，默认 <seq>/ground_truth/data/imu_pose.txt
-#   SKIP_RUN=1   跳过跟踪，只评测已有轨迹
-#   SKIP_EVAL=1  只跟踪，不评测
-#   FORCE=1      已有 APE 结果也重跑
-#   T_MAX_DIFF   时间关联阈值（秒），默认 0.02
-#   TAG_ENABLE   写入临时 yaml 的 Tag.enable，默认 1
-#                （20260807 的 01-1_stereo+imu.yaml 原文件是 0，批量评测会打开）
-#   GAMMA_ENABLE 写入临时 yaml 的 Tag.gamma_enable，默认 1；0=AprilTag 前不做 gamma
-#   RESULTS      结果目录，默认 <repo>/results
+# Environment variables (all optional):
+#   SETTINGS     Override the date-selected calibration yaml
+#   GT           Ground truth for single-sequence mode; default <seq>/ground_truth/data/imu_pose.txt
+#   SKIP_RUN=1   Skip tracking and evaluate an existing trajectory
+#   SKIP_EVAL=1  Track only, do not evaluate
+#   FORCE=1      Re-run even if APE results already exist
+#   T_MAX_DIFF   Association threshold in seconds, default 0.02
+#   TAG_ENABLE   Tag.enable written into the temporary yaml, default 1
+#                (the 20260807 yaml ships with Tag.enable 0; batch eval turns it on)
+#   GAMMA_ENABLE Tag.gamma_enable written into the temporary yaml, default 1; 0 skips gamma before AprilTag
+#   RESULTS      Output directory, default <repo>/results
 #
-# 标定（与 README 一致，按采集日期而不是按场景）:
-#   20260807 -> Examples/TagFusion/XREAL_Glass/01-1_stereo+imu.yaml
-#   20260819 -> Examples/TagFusion/XREAL_Glass/0819_ror_pat_led_f_stereo+imu.yaml
+# Calibration (same as README, by capture date rather than by scene):
+#   20260807 -> Examples/TagFusion/XREAL_Glass/20260807_stereo+imu.yaml
+#   20260819 -> Examples/TagFusion/XREAL_Glass/20260819_stereo+imu.yaml
 #
-# 本机没有显示器。脚本会基于上述 yaml 生成临时配置，关掉 imshow，
-# 并把轨迹、日志、APE 写到 results/<date>/<scene>/<seq>/。
-# summary.tsv 同时记录最终轨迹和在线轨迹的平移 RMSE（米）与旋转 RMSE（度）。
-# 旋转用 evo -r angle_deg，对齐与平移相同（-a，SE3 Umeyama）。
-# 跟踪过程中 f_*.txt / kf_*.txt / FrameTimeStats.csv 先落在
-# Examples/TagFusion/XREAL_Glass/，结束后搬进 results。
+# This machine has no display. The script copies the yaml above, turns imshow off,
+# and writes trajectories, logs, and APE under results/<date>/<scene>/<seq>/.
+# summary.tsv records translation RMSE (meters) and rotation RMSE (degrees)
+# for both the final trajectory and the online trajectory.
+# Rotation uses evo -r angle_deg. Alignment matches translation (-a, SE3 Umeyama).
+# Tracking writes f_*.txt / kf_*.txt / FrameTimeStats.csv into the per-sequence
+# output directory (WORK_DIR), not into Examples/TagFusion/XREAL_Glass/.
 
 set -euo pipefail
 
@@ -45,8 +47,8 @@ export PATH="${HOME}/.local/bin:${PATH}"
 settings_for_date() {
   local date="$1"
   case "${date}" in
-    20260807) echo "${GLASS}/01-1_stereo+imu.yaml" ;;
-    20260819) echo "${GLASS}/0819_ror_pat_led_f_stereo+imu.yaml" ;;
+    20260807) echo "${GLASS}/20260807_stereo+imu.yaml" ;;
+    20260819) echo "${GLASS}/20260819_stereo+imu.yaml" ;;
     *)
       echo "ERROR: no settings mapped for date ${date}" >&2
       return 1
@@ -79,7 +81,7 @@ if [[ ! -x "${GLASS}/stereo_inertial_xreal_glass_tag" ]]; then
   exit 1
 fi
 
-# 生成无界面 yaml。OpenCV FileStorage 认 "key: value"。
+# Build a headless yaml. OpenCV FileStorage accepts "key: value".
 prepare_settings() {
   local src="$1"
   local dst="$2"
@@ -142,8 +144,8 @@ ape_rmse() {
   awk '$1 == "rmse" { print $2; found=1 } END { if (!found) print "nan" }' "${report}"
 }
 
-# f_*.txt / OnlineCameraTrajectory.txt 是相机位姿 Twc。
-# IMU 位姿与 KeyFrame::GetImuPose 一致：Twb = Twc * inv(IMU.T_b_c1)。
+# f_*.txt / OnlineCameraTrajectory.txt store the camera pose Twc.
+# The IMU pose matches KeyFrame::GetImuPose: Twb = Twc * inv(IMU.T_b_c1).
 cam_traj_to_imu() {
   local src="$1"
   local dst="$2"
@@ -223,7 +225,7 @@ Path(dst).write_text("\n".join(out) + ("\n" if out else ""))
 PY
 }
 
-# relation: trans_part（米）或 angle_deg（度）
+# relation: trans_part (meters) or angle_deg (degrees)
 eval_one() {
   local est="$1"
   local tag="$2"
@@ -257,8 +259,8 @@ ensure_summary() {
   fi
 }
 
-# 跑一条序列。成功返回 0。
-# 参数: date scene seq_name glass_dir gt_file out_dir
+# Run one sequence. Returns 0 on success.
+# Arguments: date scene seq_name glass_dir gt_file out_dir
 run_sequence() {
   local date="$1"
   local scene="$2"
@@ -299,7 +301,7 @@ run_sequence() {
   echo "OUT      = ${out_dir}"
 
   if [[ "${SKIP_RUN:-0}" != "1" ]]; then
-    # 跟踪输出写在本序列结果目录，避免和另一路评测抢 Examples/TagFusion/XREAL_Glass/。
+    # Write tracking output in this sequence directory so another eval does not share Examples/TagFusion/XREAL_Glass/.
     set +e
     (
       cd "${out_dir}"

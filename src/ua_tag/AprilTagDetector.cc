@@ -27,7 +27,7 @@
 
 namespace ORB_SLAM3
 {
-namespace tag
+namespace xreal_tag
 {
 
 namespace
@@ -48,7 +48,7 @@ const AprilTags::TagCodes *GetTagCodes(const std::string &family)
     return nullptr;
 }
 
-// 将图像转换为灰度图像
+// Convert the image to grayscale
 cv::Mat ToGray(const cv::Mat &image)
 {
     if(image.empty())
@@ -94,8 +94,8 @@ bool HasSignificantDistortion(const cv::Mat &dist)
     return false;
 }
 
-// 用 GeometricCamera::unproject 把原图角点收到与 ORB 一致的理想针孔像素（K 同相机）
-void UndistortCornersWithGeometricCamera(const tag::TagObservation &src,
+// Lift raw-image corners to ideal pinhole pixels consistent with ORB via GeometricCamera::unproject (same camera K)
+void UndistortCornersWithGeometricCamera(const xreal_tag::TagObservation &src,
                                          GeometricCamera *geom,
                                          std::array<cv::Point2f, 4> &out)
 {
@@ -105,14 +105,14 @@ void UndistortCornersWithGeometricCamera(const tag::TagObservation &src,
     const float cy = geom->getParameter(3);
     for(int k = 0; k < 4; ++k)
     {
-        const cv::Point3f ray = geom->unproject(src.corners_raw_[k]);
+        const cv::Point3f ray = geom->unproject(src.corners_raw[k]);
         const float invz = (std::abs(ray.z) > 1e-12f) ? (1.f / ray.z) : 1.f;
         out[k] = cv::Point2f(fx * ray.x * invz + cx, fy * ray.y * invz + cy);
     }
 }
 
-// 角点去畸变：优先 GeometricCamera（与 ORB BA 同源）；否则针孔用 cv::undistortPoints
-void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
+// Undistort corners: prefer GeometricCamera (same source as ORB BA); otherwise pinhole uses cv::undistortPoints
+void UndistortCorners(const xreal_tag::TagObservation &src, const CameraModel &camera,
                       GeometricCamera *geom, std::array<cv::Point2f, 4> &out)
 {
     if(geom)
@@ -123,18 +123,18 @@ void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
 
     if(!HasSignificantDistortion(camera.dist_coeffs))
     {
-        out = src.corners_raw_;
+        out = src.corners_raw;
         return;
     }
 
-    // 无 GeometricCamera 时：针孔走 OpenCV；鱼眼不再用 cv::fisheye（与 KB 不一致）
+    // Without GeometricCamera: pinhole goes through OpenCV; fisheye no longer uses cv::fisheye (inconsistent with KB)
     if(camera.is_fisheye)
     {
-        out = src.corners_raw_;
+        out = src.corners_raw;
         return;
     }
 
-    std::vector<cv::Point2f> pts(src.corners_raw_.begin(), src.corners_raw_.end());
+    std::vector<cv::Point2f> pts(src.corners_raw.begin(), src.corners_raw.end());
     std::vector<cv::Point2f> undist;
     const cv::Mat K = cv::Mat(camera.K());
     cv::undistortPoints(pts, undist, K, camera.dist_coeffs, cv::noArray(), K);
@@ -142,7 +142,7 @@ void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
         out[k] = undist[k];
 }
 
-// 针孔零畸变重投影（仅作无 GeometricCamera 时的回退）
+// Pinhole zero-distortion reprojection (fallback only when GeometricCamera is absent)
 double ComputeReprojectionErrorPinhole(const std::vector<cv::Point3f> &object_pts,
                                        const std::vector<cv::Point2f> &image_pts,
                                        const cv::Mat &rvec,
@@ -167,7 +167,7 @@ double ComputeReprojectionErrorPinhole(const std::vector<cv::Point3f> &object_pt
     return std::sqrt(sum_sq / static_cast<double>(image_pts.size()));
 }
 
-// 与 ORB BA 一致：GeometricCamera::project 到原图像素，对比 corners_raw_
+// Consistent with ORB BA: GeometricCamera::project onto raw-image pixels, compared with corners_raw
 double ComputeReprojectionErrorGeometric(const std::vector<cv::Point3f> &object_pts,
                                          const std::array<cv::Point2f, 4> &corners_raw,
                                          const Sophus::SE3f &T_ct,
@@ -192,10 +192,10 @@ double ComputeReprojectionErrorGeometric(const std::vector<cv::Point3f> &object_
     return std::sqrt(sum_sq / 4.0);
 }
 
-// 相对预测的旋转角偏差（弧度）：R_err = R_pred^T * R_cand
-double RotationDeltaToPrediction(const tag::TagPoseCandidate &cand, const PosePrediction &pred)
+// Rotation-angle error relative to the prediction (radians): R_err = R_pred^T * R_cand
+double RotationDeltaToPrediction(const xreal_tag::TagPoseCandidate &cand, const PosePrediction &pred)
 {
-    const Eigen::Matrix3f Rf = cand.t_ct_.rotationMatrix();
+    const Eigen::Matrix3f Rf = cand.t_ct.rotationMatrix();
     cv::Matx33d R_cand;
     for(int r = 0; r < 3; ++r)
         for(int c = 0; c < 3; ++c)
@@ -207,21 +207,21 @@ double RotationDeltaToPrediction(const tag::TagPoseCandidate &cand, const PosePr
     return std::acos(cos_angle);
 }
 
-// 相对预测的平移欧氏偏差（米）
-double TranslationDeltaToPrediction(const tag::TagPoseCandidate &cand, const PosePrediction &pred)
+// Euclidean translation error relative to the prediction (meters)
+double TranslationDeltaToPrediction(const xreal_tag::TagPoseCandidate &cand, const PosePrediction &pred)
 {
-    const Eigen::Vector3f tf = cand.t_ct_.translation();
+    const Eigen::Vector3f tf = cand.t_ct.translation();
     const cv::Vec3d dt = cv::Vec3d(tf[0], tf[1], tf[2]) - pred.t;
     return std::sqrt(dt.dot(dt));
 }
 
-// 第 2/3 层歧义消解。
-// 输入 candidates 必须已经通过：正深度检查（候选生成阶段）。
-// 本函数内再做：数值有效性、绝对重投影 RMSE、误差比、时序门控/代价。
-// IPPE_SQUARE 最多 2 个候选；num_candidates > 2 直接失败。
-// 返回 selected_candidate_；不可信 / 未消歧时返回 -1（正式返回值不做“临时最优”）。
-// 若双解均有效，写入 ambiguity_ratio = e_worse / e_better。
-int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
+// Ambiguity resolution, layers 2/3.
+// Input candidates must already have passed the positive-depth check (candidate-generation stage).
+// This function then checks numerical validity, absolute reprojection RMSE, the error ratio, and temporal gating / cost.
+// IPPE_SQUARE has at most 2 candidates; num_candidates > 2 fails immediately.
+// Returns selected_candidate; returns -1 when untrusted or unresolved (the official return is not a provisional best).
+// If both solutions are valid, write ambiguity_ratio = e_worse / e_better.
+int ResolvePoseAmbiguity(const std::array<xreal_tag::TagPoseCandidate, 2> &candidates,
                          int num_candidates,
                          const PosePrediction *prediction,
                          int tag_id,
@@ -232,35 +232,35 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
     if(num_candidates <= 0 || num_candidates > 2)
         return -1;
 
-    constexpr double kMaxReprojectionRmse = 3.0;  // 需标定
+    constexpr double kMaxReprojectionRmse = 3.0;  // needs calibration
     constexpr double kTauRhoStrong = 3.0;
-    constexpr double kErrorEps = 1e-9; // 避免除零
+    constexpr double kErrorEps = 1e-9; // avoid division by zero
 
     int i_better = 0;
     int i_worse = -1;
     if(num_candidates == 2)
     {
         i_worse = 1;
-        if(candidates[1].reprojection_error_ < candidates[0].reprojection_error_)
+        if(candidates[1].reprojection_error < candidates[0].reprojection_error)
         {
             i_better = 1;
             i_worse = 0;
         }
     }
 
-    const double e1 = static_cast<double>(candidates[i_better].reprojection_error_);
+    const double e1 = static_cast<double>(candidates[i_better].reprojection_error);
     if(!std::isfinite(e1) || e1 > kMaxReprojectionRmse)
         return -1;
 
-    // 只有一个有效候选
+    // Only one valid candidate
     if(num_candidates == 1)
         return i_better;
 
-    const double e2 = static_cast<double>(candidates[i_worse].reprojection_error_);
+    const double e2 = static_cast<double>(candidates[i_worse].reprojection_error);
     if(!std::isfinite(e2))
         return -1;
 
-    // ρ = e2/e1（加 eps 避免 e1=e2=0 被当成强支持）
+    // ρ = e2/e1 (add eps so e1=e2=0 is not treated as strong support)
     const double rho = (e2 + kErrorEps) / (e1 + kErrorEps);
     ambiguity_ratio = static_cast<float>(rho);
     const bool strong_reproj = (rho > kTauRhoStrong);
@@ -269,21 +269,21 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
                           (prediction->tag_id < 0 || prediction->tag_id == tag_id);
 
     // -----------------------------------------------------
-    // 强重投影证据：优先最小误差解；有预测时仅做宽松异常检查
+    // Strong reprojection evidence: prefer the lower-error solution; when a prediction exists, only a loose outlier check
     // -----------------------------------------------------
     if(strong_reproj)
     {
         if(has_pred)
         {
-            constexpr double kLooseTauR = 1.0;   // rad，需标定
-            constexpr double kLooseTauT = 0.30;  // m，需标定
+            constexpr double kLooseTauR = 1.0;   // rad, needs calibration
+            constexpr double kLooseTauT = 0.30;  // m, needs calibration
 
             const double dtheta =
                 RotationDeltaToPrediction(candidates[i_better], *prediction);
             const double dtrans =
                 TranslationDeltaToPrediction(candidates[i_better], *prediction);
 
-            // 图像与可靠预测严重冲突
+            // The image and a reliable prediction disagree severely
             if(dtheta >= kLooseTauR || dtrans >= kLooseTauT)
                 return -1;
         }
@@ -292,13 +292,13 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
     }
 
     // -----------------------------------------------------
-    // 重投影无法消歧，又没有时序预测 → 不可信
+    // Reprojection cannot disambiguate and there is no temporal prediction, so the result is untrusted
     // -----------------------------------------------------
     if(!has_pred)
         return -1;
 
     // -----------------------------------------------------
-    // 弱重投影证据：严格时序门控 → 门内综合代价（要求足够代价差）
+    // Weak reprojection evidence: strict temporal gate, then the in-gate combined cost (a sufficient cost gap is required)
     // -----------------------------------------------------
     constexpr double kTauR = 0.5;   // rad
     constexpr double kTauT = 0.15;  // m
@@ -327,19 +327,19 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
     if(n_pass == 1)
         return sole_pass;
 
-    // 两个均通过时序门控，计算综合代价
+    // Both candidates passed the temporal gate; compute the combined cost
     constexpr double kWe = 1.0;
     constexpr double kWR = 1.0;
     constexpr double kWt = 1.0;
     constexpr double kSigmaE = 1.0;   // px
     constexpr double kSigmaR = 0.2;   // rad
     constexpr double kSigmaT = 0.05;  // m
-    constexpr double kMinJGap = 0.2;  // 需标定
+    constexpr double kMinJGap = 0.2;  // needs calibration
 
     double J[2];
     for(int i = 0; i < 2; ++i)
     {
-        J[i] = kWe * static_cast<double>(candidates[i].reprojection_error_) / kSigmaE +
+        J[i] = kWe * static_cast<double>(candidates[i].reprojection_error) / kSigmaE +
                kWR * dtheta[i] / kSigmaR +
                kWt * dtrans[i] / kSigmaT;
     }
@@ -347,7 +347,7 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
     const int best = (J[0] <= J[1]) ? 0 : 1;
     const int second = 1 - best;
 
-    // 综合代价过于接近，不声称已消歧
+    // The combined costs are too close to claim that ambiguity is resolved
     if(J[second] - J[best] < kMinJGap)
         return -1;
 
@@ -381,19 +381,19 @@ cv::Mat ApplyGamma(const cv::Mat &im, const cv::Mat &lut)
 
 struct AprilTagDetector::Impl
 {
-    // ethz_apriltag2：每个 black_border 一个检测器，DetectCorners 合并结果
+    // ethz_apriltag2: one detector per black_border; DetectCorners merges the results
     std::vector<std::unique_ptr<AprilTags::TagDetector>> detectors;
     std::string family_name;
     double tag_size;
     AprilTagDetectorConfig config;
 
-    // 角点去畸变用相机（检测仍在原图上）
+    // Camera used to undistort corners (detection still runs on the raw image)
     CameraModel camera_model;
     bool has_camera_model = false;
-    // 与 ORB Tracking/BA 共用；鱼眼路径优先用其 project/unproject
+    // Shared with ORB Tracking/BA; the fisheye path prefers its project/unproject
     GeometricCamera *geometric_camera = nullptr;
 
-    // 最近一次送入检测器的图像（原图灰度 + 可选 gamma）
+    // Image most recently passed to the detector (raw grayscale + optional gamma)
     cv::Mat last_preprocessed;
     cv::Mat gamma_lut;
 
@@ -408,7 +408,7 @@ struct AprilTagDetector::Impl
         if(borders.empty())
             borders.push_back(1);
 
-        // 去重、保证 >=1，保持配置顺序
+        // Deduplicate, force >= 1, and keep the configured order
         std::vector<int> unique_borders;
         unique_borders.reserve(borders.size());
         for(int b : borders)
@@ -420,7 +420,7 @@ struct AprilTagDetector::Impl
         config.black_borders = unique_borders;
 
         detectors.reserve(unique_borders.size());
-        // 每个 black_border 一个检测器，DetectCorners 合并结果
+        // One detector per black_border; DetectCorners merges the results
         for(int bb : unique_borders)
             detectors.emplace_back(new AprilTags::TagDetector(*codes, static_cast<size_t>(bb)));
 
@@ -431,7 +431,7 @@ struct AprilTagDetector::Impl
     ~Impl() = default;
 };
 
-// 复用ORB-SLAM3的Settings，获取相机模型
+// Reuse ORB-SLAM3 Settings to obtain the camera model
 CameraModel CameraModel::FromSettings(Settings *settings)
 {
     if(!settings)
@@ -463,7 +463,7 @@ CameraModel CameraModel::FromSettings(Settings *settings)
     return cam;
 }
 
-// 从yaml文件中读取AprilTagDetector的配置
+// Load the AprilTagDetector configuration from the yaml file
 AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &settings_file)
 {
     AprilTagDetectorConfig config;
@@ -481,7 +481,7 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
     if(!node.empty())
         config.hamming = static_cast<int>(node);
 
-    // 优先 Tag.black_borders: [1, 2] 或标量 2；否则兼容 Tag.black_border: 1
+    // Prefer Tag.black_borders: [1, 2] or the scalar 2; otherwise accept the legacy Tag.black_border: 1
     node = fs["Tag.black_borders"];
     if(!node.empty() && node.isSeq())
     {
@@ -510,7 +510,7 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
     if(!node.empty())
         config.tag_size = static_cast<double>(node);
 
-    // 按 id 覆盖边长：Tag.size_by_id: [ {id: 0, size: 0.06}, {id: 10, size: 0.144} ]
+    // Override side length by id: Tag.size_by_id: [ {id: 0, size: 0.06}, {id: 10, size: 0.144} ]
     node = fs["Tag.size_by_id"];
     if(!node.empty() && node.isSeq())
     {
@@ -529,7 +529,7 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
         }
     }
 
-    // 屏蔽指定 id：Tag.ignore_ids: [1, 2, 99]
+    // Ignore each listed id: Tag.ignore_ids: [1, 2, 99]
     node = fs["Tag.ignore_ids"];
     if(!node.empty() && node.isSeq())
     {
@@ -586,35 +586,35 @@ void AprilTagDetector::SetGeometricCamera(GeometricCamera *camera)
     impl_->geometric_camera = camera;
 }
 
-// 返回最近一次 DetectCorners 的预处理图（引用内部缓冲，下一帧会被覆盖）
+// Return the preprocessed image from the latest DetectCorners (references an internal buffer overwritten on the next frame)
 const cv::Mat &AprilTagDetector::GetLastPreprocessedImage() const
 {
     return impl_->last_preprocessed;
 }
 
-// 默认初始化AprilTagDetector
+// Default-construct AprilTagDetector
 AprilTagDetector::AprilTagDetector(const AprilTagDetectorConfig &config)
     : impl_(new Impl(config))
 {
 }
 
-// 从yaml文件中初始化AprilTagDetector
+// Construct AprilTagDetector from a yaml file
 AprilTagDetector::AprilTagDetector(const std::string &settings_file)
     : impl_(new Impl(AprilTagDetectorConfig::FromYaml(settings_file)))
 {
 }
 
-// 销毁AprilTagDetector
+// Destroy AprilTagDetector
 AprilTagDetector::~AprilTagDetector()
 {
     delete impl_;
 }
 
-// 检测 AprilTags 角点：原图（可选 gamma）上检测，再对角点做去畸变
-// 后端：Thirdparty/apriltag ethz_apriltag2；对每个 black_border 各扫一遍，按 id 合并
+// Detect AprilTags corners on the raw image (optional gamma), then undistort the corners
+// Backend: Thirdparty/apriltag ethz_apriltag2; scan each black_border once and merge by id
 bool AprilTagDetector::DetectCorners(const cv::Mat &image,
-                                     std::vector<tag::TagObservation> &observations,
-                                     tag::CameraId camera_id,
+                                     std::vector<xreal_tag::TagObservation> &observations,
+                                     xreal_tag::CameraId camera_id,
                                      GeometricCamera *geometric_camera)
 {
     observations.clear();
@@ -630,11 +630,11 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
     if(impl_->detectors.empty())
         return false;
 
-    // 右目必须显式传入相机模型，禁止回退默认/左目
+    // The right camera model must be passed explicitly; do not fall back to the default or the left camera
     GeometricCamera *geom = geometric_camera;
     if(!geom)
     {
-        if(camera_id == tag::CameraId::RIGHT)
+        if(camera_id == xreal_tag::CameraId::RIGHT)
         {
             std::cerr << "ERROR: DetectCorners(RIGHT) requires GeometricCamera "
                          "(no left/default fallback)"
@@ -644,8 +644,8 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
         geom = impl_->geometric_camera;
     }
 
-    // tag_id_ -> 最优观测（更低 hamming_，其次更大 observed_perimeter_）
-    std::unordered_map<int, tag::TagObservation> best_by_id;
+    // tag_id -> best observation (lower hamming first, then larger observed_perimeter)
+    std::unordered_map<int, xreal_tag::TagObservation> best_by_id;
 
     for(const auto &det_ptr : impl_->detectors)
     {
@@ -662,33 +662,33 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
             if(impl_->config.IsIgnored(det.id))
                 continue;
 
-            tag::TagObservation obs;
-            obs.tag_id_ = det.id;
-            obs.camera_id_ = camera_id;
-            obs.hamming_ = det.hammingDistance;
-            obs.observed_perimeter_ = det.observedPerimeter;
-            obs.decision_margin_ = obs.observed_perimeter_;
+            xreal_tag::TagObservation obs;
+            obs.tag_id = det.id;
+            obs.camera_id = camera_id;
+            obs.hamming = det.hammingDistance;
+            obs.observed_perimeter = det.observedPerimeter;
+            obs.decision_margin = obs.observed_perimeter;
             for(int k = 0; k < 4; ++k)
-                obs.corners_raw_[k] = cv::Point2f(det.p[k].first, det.p[k].second);
-            obs.observed_area_ = tag::TagObservation::ComputeQuadArea(obs.corners_raw_);
+                obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
+            obs.observed_area = xreal_tag::TagObservation::ComputeQuadArea(obs.corners_raw);
 
             if(impl_->has_camera_model || geom)
-                UndistortCorners(obs, impl_->camera_model, geom, obs.corners_undistorted_);
+                UndistortCorners(obs, impl_->camera_model, geom, obs.corners_undistorted);
             else
-                obs.corners_undistorted_ = obs.corners_raw_;
+                obs.corners_undistorted = obs.corners_raw;
 
-            auto it = best_by_id.find(obs.tag_id_);
+            auto it = best_by_id.find(obs.tag_id);
             if(it == best_by_id.end())
             {
-                best_by_id.emplace(obs.tag_id_, std::move(obs));
+                best_by_id.emplace(obs.tag_id, std::move(obs));
                 continue;
             }
 
-            const tag::TagObservation &prev = it->second;
+            const xreal_tag::TagObservation &prev = it->second;
             const bool better =
-                (obs.hamming_ < prev.hamming_) ||
-                (obs.hamming_ == prev.hamming_ &&
-                 obs.observed_perimeter_ > prev.observed_perimeter_);
+                (obs.hamming < prev.hamming) ||
+                (obs.hamming == prev.hamming &&
+                 obs.observed_perimeter > prev.observed_perimeter);
             if(better)
                 it->second = std::move(obs);
         }
@@ -701,27 +701,27 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
     return true;
 }
 
-// 估计AprilTags的位姿
-bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
+// Estimate AprilTags poses
+bool AprilTagDetector::EstimatePose(xreal_tag::TagObservation &observation,
                                     const CameraModel &camera,
                                     const PosePrediction *prediction)
 {
-    observation.pose_estimate_ = std::nullopt;
+    observation.pose_estimate = std::nullopt;
 
-    const double tag_size = impl_->config.GetTagSize(observation.tag_id_);
+    const double tag_size = impl_->config.GetTagSize(observation.tag_id);
     if(tag_size <= 0.0 || camera.fx <= 0.0 || camera.fy <= 0.0)
         return false;
 
-    // 构建AprilTag的物体点，Tag自身坐标系下的4个角点3D坐标
+    // Build AprilTag object points: 3D coordinates of the 4 corners in the Tag frame
     std::vector<cv::Point3f> object_pts;
     BuildSquareObjectPoints(tag_size, object_pts);
 
-    // IPPE 初值：GeometricCamera 一致的针孔像素 + 零畸变 K
-    // 候选误差：优先用 GeometricCamera::project vs corners_raw_（与 ORB BA 同域）
+    // IPPE seed: pinhole pixels consistent with GeometricCamera, plus a zero-distortion K
+    // Candidate error: prefer GeometricCamera::project vs corners_raw (same domain as ORB BA)
     const cv::Mat K = cv::Mat(camera.K());
     const cv::Mat dist_empty;
-    std::vector<cv::Point2f> image_pts(observation.corners_undistorted_.begin(),
-                                       observation.corners_undistorted_.end());
+    std::vector<cv::Point2f> image_pts(observation.corners_undistorted.begin(),
+                                       observation.corners_undistorted.end());
 
     std::vector<cv::Mat> rvecs, tvecs;
     int nsol = cv::solvePnPGeneric(object_pts, image_pts, K, dist_empty,
@@ -731,9 +731,9 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
         return false;
 
     GeometricCamera *geom = impl_->geometric_camera;
-    tag::TagPoseEstimate estimate;
+    xreal_tag::TagPoseEstimate estimate;
 
-    // 仅正深度解进入候选（只保留有效 IPPE 解）
+    // Only positive-depth solutions enter the candidate list (keep valid IPPE solutions only)
     int num_candidates = 0;
     for(int i = 0; i < nsol && num_candidates < 2; ++i)
     {
@@ -746,53 +746,53 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
         cv::Matx33d R;
         cv::Rodrigues(rvecs[i], R);
 
-        tag::TagPoseCandidate &cand = estimate.candidates_[num_candidates++];
-        cand.t_ct_ = MakeTct(R, t);
+        xreal_tag::TagPoseCandidate &cand = estimate.candidates[num_candidates++];
+        cand.t_ct = MakeTct(R, t);
         if(geom)
         {
-            cand.reprojection_error_ = static_cast<float>(ComputeReprojectionErrorGeometric(
-                object_pts, observation.corners_raw_, cand.t_ct_, geom));
+            cand.reprojection_error = static_cast<float>(ComputeReprojectionErrorGeometric(
+                object_pts, observation.corners_raw, cand.t_ct, geom));
         }
         else
         {
-            cand.reprojection_error_ = static_cast<float>(ComputeReprojectionErrorPinhole(
+            cand.reprojection_error = static_cast<float>(ComputeReprojectionErrorPinhole(
                 object_pts, image_pts, rvecs[i], tvecs[i], K));
         }
-        cand.valid_ = std::isfinite(cand.reprojection_error_);
+        cand.valid = std::isfinite(cand.reprojection_error);
     }
 
     if(num_candidates <= 0)
         return false;
 
-    // IPPE_SQUARE 期望 2 个有效解；不足则不写入 pose_estimate
+    // IPPE_SQUARE expects 2 valid solutions; if fewer, do not write pose_estimate
     if(num_candidates < 2)
         return false;
 
     float ambiguity_ratio = -1.0f;
-    const int best = ResolvePoseAmbiguity(estimate.candidates_,
+    const int best = ResolvePoseAmbiguity(estimate.candidates,
                                           num_candidates,
                                           prediction,
-                                          observation.tag_id_,
+                                          observation.tag_id,
                                           ambiguity_ratio);
     if(best < 0)
     {
-        // 已有候选但未消歧：仍写入 estimate，selected_candidate_ 保持 -1
-        estimate.ambiguity_ratio_ = ambiguity_ratio;
-        observation.pose_estimate_ = estimate;
+        // Candidates exist but are unresolved: still write the estimate, and keep selected_candidate at -1
+        estimate.ambiguity_ratio = ambiguity_ratio;
+        observation.pose_estimate = estimate;
         return false;
     }
 
-    estimate.selected_candidate_ = best;
-    estimate.ambiguity_ratio_ = ambiguity_ratio;
-    observation.pose_estimate_ = estimate;
+    estimate.selected_candidate = best;
+    estimate.ambiguity_ratio = ambiguity_ratio;
+    observation.pose_estimate = estimate;
     return true;
 }
 
 namespace {
 
-// 将 source 的两候选经 T_target_source 变换到目标相机系，对 target_corners 算 RMSE。
-// T_target_source：P_target = T_target_source * P_source
-bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
+// Transform both candidates of source by T_target_source into the target camera frame and compute RMSE against target_corners.
+// T_target_source: P_target = T_target_source * P_source
+bool CrossReprojDisambiguate(xreal_tag::TagObservation &source_obs,
                              const std::array<cv::Point2f, 4> &target_corners,
                              const Sophus::SE3f &T_target_source,
                              GeometricCamera *cam_target,
@@ -805,14 +805,14 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
         return false;
     if(!source_obs.IsDetectValid())
         return false;
-    if(!source_obs.pose_estimate_.has_value())
+    if(!source_obs.pose_estimate.has_value())
         return false;
 
-    tag::TagPoseEstimate &est = *source_obs.pose_estimate_;
-    // 已消歧：直接返回，不重复打 fail 日志
-    if(est.selected_candidate_ >= 0)
+    xreal_tag::TagPoseEstimate &est = *source_obs.pose_estimate;
+    // Already disambiguated: return immediately and do not log fail again
+    if(est.selected_candidate >= 0)
         return false;
-    if(!est.candidates_[0].valid_ || !est.candidates_[1].valid_)
+    if(!est.candidates[0].valid || !est.candidates[1].valid)
         return false;
 
     std::vector<cv::Point3f> object_pts;
@@ -823,21 +823,21 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
 
     for(int i = 0; i < 2; ++i)
     {
-        const Sophus::SE3f &T_cs_t = est.candidates_[i].t_ct_;
+        const Sophus::SE3f &T_cs_t = est.candidates[i].t_ct;
         double sum_sq = 0.0;
         bool ok = true;
         for(int k = 0; k < 4; ++k)
         {
             const Eigen::Vector3f P_t(object_pts[k].x, object_pts[k].y,
                                      object_pts[k].z);
-            // 源相机系：P_cs = T_cs_t * P_t
+            // Source camera frame: P_cs = T_cs_t * P_t
             const Eigen::Vector3f P_cs = T_cs_t * P_t;
             if(P_cs.z() <= 0.0f)
             {
                 ok = false;
                 break;
             }
-            // 目标相机系：P_ct = T_target_source * P_cs
+            // Target camera frame: P_ct = T_target_source * P_cs
             const Eigen::Vector3f P_ct = T_target_source * P_cs;
             if(P_ct.z() <= 0.0f)
             {
@@ -879,26 +879,26 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
 
     if(!(rho > tau_rho) || !std::isfinite(rho))
     {
-        // 仅对尚未消歧的观测打印；同 ID 另一目已消歧时由调用方关闭 log_fail
-        if(log_fail && est.selected_candidate_ < 0)
+        // Log only observations that are still unresolved; the caller clears log_fail when the other eye of the same ID is already resolved
+        if(log_fail && est.selected_candidate < 0)
         {
-            std::cout << "[TagStereo] fail tag_id=" << source_obs.tag_id_
+            std::cout << "[TagStereo] fail tag_id=" << source_obs.tag_id
                       << " dir=" << direction_label
                       << " reason=stereo_ratio_weak"
                       << " e0=" << e[0] << " e1=" << e[1]
                       << " rho=" << rho << " tau=" << tau_rho
-                      << " mono_ratio=" << est.ambiguity_ratio_
+                      << " mono_ratio=" << est.ambiguity_ratio
                       << std::endl;
         }
         return false;
     }
 
-    est.selected_candidate_ = i_better;
-    est.ambiguity_ratio_ = static_cast<float>(rho);
+    est.selected_candidate = i_better;
+    est.ambiguity_ratio = static_cast<float>(rho);
 
-    if(log_fail)  // CrossReproj 用 log_fail 兼控 ok；调用方已合入“是否值得打印”
+    if(log_fail)  // CrossReproj also uses log_fail to gate ok; the caller has already folded in whether a log line is worthwhile
     {
-        std::cout << "[TagStereo] ok tag_id=" << source_obs.tag_id_
+        std::cout << "[TagStereo] ok tag_id=" << source_obs.tag_id
                   << " dir=" << direction_label
                   << " selected=" << i_better
                   << " e_better=" << e_better
@@ -911,8 +911,8 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
 
 }  // namespace
 
-bool DisambiguateWithStereo(tag::TagObservation &left_obs,
-                            tag::TagObservation &right_obs,
+bool DisambiguateWithStereo(xreal_tag::TagObservation &left_obs,
+                            xreal_tag::TagObservation &right_obs,
                             const Sophus::SE3f &T_lr,
                             GeometricCamera *cam_left,
                             GeometricCamera *cam_right,
@@ -924,27 +924,27 @@ bool DisambiguateWithStereo(tag::TagObservation &left_obs,
         return false;
     if(!left_obs.IsDetectValid() || !right_obs.IsDetectValid())
         return false;
-    if(left_obs.tag_id_ < 0 || left_obs.tag_id_ != right_obs.tag_id_)
+    if(left_obs.tag_id < 0 || left_obs.tag_id != right_obs.tag_id)
         return false;
 
-    // 任一相机已消歧，或调用方关闭日志（如 Tag 已入图）：不刷 stereo fail/ok
+    // Either camera is already resolved, or the caller disabled logging (for example the Tag is already in the map): do not spam stereo fail/ok
     const bool any_resolved =
         left_obs.IsAmbiguityResolved() || right_obs.IsAmbiguityResolved();
     const bool log_fail = log_stereo && !any_resolved;
 
-    // 1) L→R：消歧左目（P_right = T_rl * P_left）
-    if(!left_obs.IsAmbiguityResolved() && left_obs.pose_estimate_.has_value())
+    // 1) L->R: disambiguate the left camera (P_right = T_rl * P_left)
+    if(!left_obs.IsAmbiguityResolved() && left_obs.pose_estimate.has_value())
     {
-        if(CrossReprojDisambiguate(left_obs, right_obs.corners_raw_,
+        if(CrossReprojDisambiguate(left_obs, right_obs.corners_raw,
                                    T_lr.inverse(), cam_right, tag_size, tau_rho,
                                    "L2R", log_fail))
             return true;
     }
 
-    // 2) 左目失败 → R→L：消歧右目（P_left = T_lr * P_right）
-    if(!right_obs.IsAmbiguityResolved() && right_obs.pose_estimate_.has_value())
+    // 2) Left failed, then R->L: disambiguate the right camera (P_left = T_lr * P_right)
+    if(!right_obs.IsAmbiguityResolved() && right_obs.pose_estimate.has_value())
     {
-        if(CrossReprojDisambiguate(right_obs, left_obs.corners_raw_, T_lr,
+        if(CrossReprojDisambiguate(right_obs, left_obs.corners_raw, T_lr,
                                    cam_left, tag_size, tau_rho, "R2L",
                                    log_fail))
             return true;
@@ -953,7 +953,7 @@ bool DisambiguateWithStereo(tag::TagObservation &left_obs,
     return false;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif  // HAS_APRILTAG

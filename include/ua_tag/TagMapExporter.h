@@ -16,19 +16,19 @@ namespace ORB_SLAM3 {
 class KeyFrame;
 class Map;
 
-namespace tag {
+namespace xreal_tag {
 
 class MapTagData;
 class TagFrameData;
 
-// 导出 Map 中 MapTag 世界系四角点与关联关键帧相机 Pose
+// Export, from the Map, each MapTag world-frame corner and the associated keyframe camera Pose
 class TagMapExporter
 {
 public:
-    // output_dir 下写入 tag_map_corners.csv / tag_map_mirror_corners.csv
+    // Under output_dir, write tag_map_corners.csv / tag_map_mirror_corners.csv
     //                    / tag_camera_trajectory.txt(TUM)
-    //                    / tag_detections.csv（每帧检测）
-    //                    / tag_first_registration.csv（每个 MapTag 首次注册时几何）
+    //                    / tag_detections.csv (detections of every frame)
+    //                    / tag_first_registration.csv (geometry when each MapTag is first registered)
     explicit TagMapExporter(const std::string &output_dir,
                             TagFactorWeightParams factor_weight = {});
     ~TagMapExporter();
@@ -39,48 +39,48 @@ public:
     bool IsEnabled() const noexcept { return enabled_; }
     const std::string &GetOutputDir() const noexcept { return output_dir_; }
 
-    // 追加一帧相机轨迹（输入 Tcw；落盘 TUM：timestamp tx ty tz qx qy qz qw，位姿为 Twc）
+    // Append one camera-trajectory sample (input Tcw; stored as TUM: timestamp tx ty tz qx qy qz qw, pose is Twc)
     void AppendCameraPose(unsigned long frame_id,
                           double timestamp,
                           const Sophus::SE3f &Tcw);
 
-    // 追加本帧 AprilTag 检测日志（左右目各行）：面积/周长/hamming/中心
+    // Append this frame AprilTag detection log (one row per eye): area / perimeter / hamming / center
     void AppendTagDetections(unsigned long frame_id,
                              double timestamp,
                              const TagFrameData &frame_data);
 
-    // 某个 MapTag 首次注册进地图时：记录该 KF 上观测面积、距离、光轴–平面/法向夹角
-    // left_idx / right_idx 为 KF.tag_frame_data_ 下标，无观测则为 -1
+    // When a MapTag is first inserted into the map: record on that KF the observed area, distance, and the angles between the optical axis and the plane / normal
+    // left_idx / right_idx index KF.tag_frame_data_; -1 when that eye has no observation
     void AppendMapTagFirstRegistration(KeyFrame *pKF,
                                        int tag_id,
                                        int left_idx,
                                        int right_idx,
                                        MapTagData *pTag);
 
-    // 初始化 Commit 成功后：对初始化 KF 上已关联的全部 MapTag 各记一行（首次注册）
+    // After a successful init Commit: one first-registration row for every MapTag already linked to an init KF
     void LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF);
 
-    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标 + 因子权重汇总（可重复调用覆盖）
-    // 同时写出 tag_map_mirror_corners.csv（首次赋位姿时未选中的 IPPE 镜像解）
-    // verbose=false 用于在线更新，避免刷屏
+    // Export every MapTag in the current Map: tag_id + four world-frame corners + factor-weight summary (repeat calls overwrite)
+    // Also write tag_map_mirror_corners.csv (the IPPE mirror solution not selected when the pose was first assigned)
+    // verbose=false is for online updates, so the log is not spammed
     bool SaveTagMapCorners(Map &map, bool verbose = true) const;
 
-    // 导出有 MapTag 关联的关键帧位姿（Twc TUM）
+    // Export poses of keyframes that are associated with a MapTag (Twc, TUM)
     bool SaveTagInitKeyFrames(Map &map) const;
 
-    // 导出定标后的 ORB 初始化地图点 + 两帧关键帧位姿（与 Tag 导出同目录，便于尺度对比）
+    // Export the ORB init map points after scale alignment, plus the two keyframe poses (same directory as the Tag export, for scale comparison)
     // orb_kf_tcw: (timestamp, Tcw)
     bool SaveOrbInitMap(
         const std::vector<Eigen::Vector3f> &points,
         const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw) const;
 
-    // Shutdown：终局 Tag 角点/平面 + 全部 ORB 点 + KF 轨迹 + ASCII PLY（含 Tag 四边形面）
+    // Shutdown: final Tag corners/planes + every ORB point + the KF trajectory + an ASCII PLY (includes Tag quad faces)
     bool SaveFinalMap(Map &map, bool verbose = true) const;
 
-    // 关闭轨迹 / 检测 / 首次注册日志文件
+    // Close the trajectory, detection, and first-registration log files
     void CloseTrajectory();
 
-    // 地图 Reset 后截断并重开导出文件，避免新旧世界系轨迹拼在同一份文件里
+    // After a map Reset, truncate and reopen the export files so trajectories from the old and new world frames are not concatenated
     void ResetSession();
 
 private:
@@ -105,7 +105,7 @@ private:
     mutable std::ofstream first_registration_file_;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

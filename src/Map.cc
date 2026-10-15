@@ -44,7 +44,7 @@ Map::Map(int initKFid):mnInitKFid(initKFid), mnMaxKFid(initKFid),/*mnLastLoopKFi
 
 Map::~Map()
 {
-    // 先断 KF↔MapTag，再释放 shared_ptr（避免 KF 悬空裸指针）
+    // Break KF <-> MapTag links first, then release the shared_ptr (avoid a dangling raw pointer in the KF)
     ClearMapTags();
 
     //TODO: erase all points from memory
@@ -99,7 +99,7 @@ bool Map::AddMapTag(const MapTagPtr &pTag)
     unique_lock<mutex> lock(mMutexMap);
     auto it = mMapTags.find(tag_id);
     if(it != mMapTags.end())
-        return it->second == pTag;  // 相同对象幂等成功；不同对象拒绝覆盖
+        return it->second == pTag;  // the same object succeeds idempotently; a different object is refused
 
     if(pTag->GetMap() && pTag->GetMap() != this)
         return false;
@@ -212,7 +212,7 @@ bool Map::CheckMapTagAssociations(std::string *error) const
 
     unique_lock<mutex> lock(mMutexMap);
 
-    // MapTag索引到KF，KF再比较索引的左右目MapTag观测下标是否与MapTag存储的观测下标一致
+    // Index from MapTag to KF, then check that the KF's left/right MapTag observation indices match the indices stored on the MapTag
     for(const auto &tag_kv : mMapTags)
     {
         const int tag_id = tag_kv.first;
@@ -240,7 +240,7 @@ bool Map::CheckMapTagAssociations(std::string *error) const
             if(mspKeyFrames.find(pKF) == mspKeyFrames.end())
                 return fail("observed KF not in Map keyframe set");
 
-            if(idx.left_index_ < 0 && idx.right_index_ < 0)
+            if(idx.left_index < 0 && idx.right_index < 0)
                 return fail("MapTag observation has no valid index");
 
             KeyFrame::MapTagAssociation assoc;
@@ -248,26 +248,26 @@ bool Map::CheckMapTagAssociations(std::string *error) const
                 return fail("KF missing reverse MapTag association");
             if(assoc.pMapTag != pTag.get())
                 return fail("KF association points to different MapTag");
-            if(assoc.leftObservationIndex != idx.left_index_ ||
-               assoc.rightObservationIndex != idx.right_index_)
+            if(assoc.leftObservationIndex != idx.left_index ||
+               assoc.rightObservationIndex != idx.right_index)
                 return fail("KF/MapTag observation indices mismatch");
 
-            if(idx.left_index_ < -1 ||
-               idx.left_index_ >= static_cast<int>(pKF->tag_frame_data_.left_.size()))
+            if(idx.left_index < -1 ||
+               idx.left_index >= static_cast<int>(pKF->tag_frame_data_.left_.size()))
                 return fail("left observation index out of range");
-            if(idx.right_index_ < -1 ||
-               idx.right_index_ >= static_cast<int>(pKF->tag_frame_data_.right_.size()))
+            if(idx.right_index < -1 ||
+               idx.right_index >= static_cast<int>(pKF->tag_frame_data_.right_.size()))
                 return fail("right observation index out of range");
-            if(idx.left_index_ >= 0 &&
-               pKF->tag_frame_data_.left_[idx.left_index_].tag_id_ != tag_id)
-                return fail("left TagObservation.tag_id_ mismatch");
-            if(idx.right_index_ >= 0 &&
-               pKF->tag_frame_data_.right_[idx.right_index_].tag_id_ != tag_id)
-                return fail("right TagObservation.tag_id_ mismatch");
+            if(idx.left_index >= 0 &&
+               pKF->tag_frame_data_.left_[idx.left_index].tag_id != tag_id)
+                return fail("left TagObservation.tag_id mismatch");
+            if(idx.right_index >= 0 &&
+               pKF->tag_frame_data_.right_[idx.right_index].tag_id != tag_id)
+                return fail("right TagObservation.tag_id mismatch");
         }
     }
 
-    // KF索引到MapTag，MapTag再比较索引的左右目KF观测下标是否与KF存储的观测下标一致
+    // Index from KF to MapTag, then check that the MapTag's left/right KF observation indices match the indices stored on the KF
     for(KeyFrame *pKF : mspKeyFrames)
     {
         if(!pKF)
@@ -299,8 +299,8 @@ bool Map::CheckMapTagAssociations(std::string *error) const
             const auto obs_it = kf_obs.find(pKF);
             if(obs_it == kf_obs.end())
                 return fail("MapTag observations missing KF");
-            if(obs_it->second.left_index_ != assoc.leftObservationIndex ||
-               obs_it->second.right_index_ != assoc.rightObservationIndex)
+            if(obs_it->second.left_index != assoc.leftObservationIndex ||
+               obs_it->second.right_index != assoc.rightObservationIndex)
                 return fail("reverse observation indices mismatch");
         }
     }
@@ -443,7 +443,7 @@ void Map::clear()
 //    for(set<MapPoint*>::iterator sit=mspMapPoints.begin(), send=mspMapPoints.end(); sit!=send; sit++)
 //        delete *sit;
 
-    // 先清理 MapTag 双向关联，再断开 KF
+    // Clear the MapTag two-way associations first, then disconnect the KF
     ClearMapTags();
 
     for(set<KeyFrame*>::iterator sit=mspKeyFrames.begin(), send=mspKeyFrames.end(); sit!=send; sit++)
@@ -509,7 +509,7 @@ void Map::ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool b
         pMP->SetWorldPos(s * Ryw * pMP->GetWorldPos() + tyw);
         pMP->UpdateNormalAndDepth();
     }
-    // MapTag 与 KF 相同：先缩放平移，再左乘 Tyw（重力对齐 / IMU 尺度）
+    // Same handling as a KF: scale the translation first, then left-multiply by Tyw (gravity alignment / IMU scale)
     for(const auto &kv : mMapTags)
     {
         const MapTagPtr &pTag = kv.second;

@@ -63,8 +63,8 @@ bool CheckBinarySE3Jacobians(EdgeT *edge, double delta, double tol, double *max_
     const g2o::SE3Quat T0 = v0->estimate();
     const g2o::SE3Quat T1 = v1->estimate();
 
-    // 解析 Jacobian 需经 JacobianWorkspace 映射存储后再写 _jacobianOplus*
-    // 派生类 override 了无参 linearizeOplus，需显式走基类带 workspace 的入口
+    // The analytic Jacobian is written to _jacobianOplus* only after JacobianWorkspace maps the storage
+    // The derived class overrides the no-argument linearizeOplus, so call the base entry that takes a workspace explicitly
     using BinaryBase =
         g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap,
                             g2o::VertexSE3Expmap>;

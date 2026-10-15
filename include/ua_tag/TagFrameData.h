@@ -7,9 +7,9 @@
 #include <vector>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
-// 一帧内左右目 Tag 观测集合（供 Frame / Tracking 挂载）
+// Left and right Tag observations of one frame (attached by Frame / Tracking)
 class TagFrameData
 {
 public:
@@ -23,21 +23,21 @@ public:
     const TagObservation *Find(int tag_id, CameraId camera_id) const noexcept;
     TagObservation *Find(int tag_id, CameraId camera_id) noexcept;
 
-    // 回写消歧结果：仅更新 selected_candidate_ 与所选候选 t_ct_（t_ct 可选）
+    // Write back disambiguation: update only selected_candidate and the chosen candidate t_ct (t_ct is optional)
     bool WriteBackSelectedCandidate(int tag_id, CameraId camera_id,
                                     int selected_candidate,
                                     const Sophus::SE3f *t_ct = nullptr);
 
     void Clear();
 
-    // 重置本帧所有 Tag 观测的优化外点（同帧多次 PoseOptimization 前调用）
+    // Reset optimization outliers of every Tag observation in this frame (call before repeated PoseOptimization on the same frame)
     void ResetOptimizationOutliers();
 
     bool IsEmpty() const noexcept;
     std::size_t GetSize() const noexcept;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

@@ -4,7 +4,7 @@
 
 namespace ORB_SLAM3
 {
-namespace tag
+namespace xreal_tag
 {
 
 TagPoseLogger::TagPoseLogger(const std::string &csv_path)
@@ -42,7 +42,7 @@ void TagPoseLogger::WriteHeader()
         << "c1_r20,c1_r21,c1_r22\n";
 }
 
-void TagPoseLogger::WriteCandidate(const tag::TagPoseCandidate &cand, bool valid)
+void TagPoseLogger::WriteCandidate(const xreal_tag::TagPoseCandidate &cand, bool valid)
 {
     if(!valid)
     {
@@ -51,11 +51,11 @@ void TagPoseLogger::WriteCandidate(const tag::TagPoseCandidate &cand, bool valid
         return;
     }
 
-    const Eigen::Matrix3f R = cand.t_ct_.rotationMatrix();
-    const Eigen::Vector3f t = cand.t_ct_.translation();
+    const Eigen::Matrix3f R = cand.t_ct.rotationMatrix();
+    const Eigen::Vector3f t = cand.t_ct.translation();
 
     file_ << "1,"
-          << cand.reprojection_error_ << ","
+          << cand.reprojection_error << ","
           << t[0] << "," << t[1] << "," << t[2] << ","
           << R(0, 0) << "," << R(0, 1) << "," << R(0, 2) << ","
           << R(1, 0) << "," << R(1, 1) << "," << R(1, 2) << ","
@@ -64,42 +64,42 @@ void TagPoseLogger::WriteCandidate(const tag::TagPoseCandidate &cand, bool valid
 
 void TagPoseLogger::LogFrame(size_t frame_id,
                              double timestamp,
-                             const std::vector<tag::TagObservation> &tags)
+                             const std::vector<xreal_tag::TagObservation> &tags)
 {
     if(!file_.is_open())
         return;
 
     for(size_t i = 0; i < tags.size(); ++i)
     {
-        const tag::TagObservation &tag = tags[i];
-        const bool has_pose = tag.pose_estimate_.has_value();
-        const int selected = has_pose ? tag.pose_estimate_->selected_candidate_ : -1;
-        const float ambiguity_ratio = has_pose ? tag.pose_estimate_->ambiguity_ratio_ : -1.0f;
+        const xreal_tag::TagObservation &tag = tags[i];
+        const bool has_pose = tag.pose_estimate.has_value();
+        const int selected = has_pose ? tag.pose_estimate->selected_candidate : -1;
+        const float ambiguity_ratio = has_pose ? tag.pose_estimate->ambiguity_ratio : -1.0f;
 
         file_ << frame_id << ","
               << timestamp << ","
-              << tag.tag_id_ << ","
+              << tag.tag_id << ","
               << (has_pose ? 1 : 0) << ","
               << selected << ","
               << ambiguity_ratio << ",";
 
         if(has_pose)
         {
-            WriteCandidate(tag.pose_estimate_->candidates_[0],
-                           tag.pose_estimate_->candidates_[0].valid_);
+            WriteCandidate(tag.pose_estimate->candidates[0],
+                           tag.pose_estimate->candidates[0].valid);
             file_ << ",";
-            WriteCandidate(tag.pose_estimate_->candidates_[1],
-                           tag.pose_estimate_->candidates_[1].valid_);
+            WriteCandidate(tag.pose_estimate->candidates[1],
+                           tag.pose_estimate->candidates[1].valid);
         }
         else
         {
-            WriteCandidate(tag::TagPoseCandidate{}, false);
+            WriteCandidate(xreal_tag::TagPoseCandidate{}, false);
             file_ << ",";
-            WriteCandidate(tag::TagPoseCandidate{}, false);
+            WriteCandidate(xreal_tag::TagPoseCandidate{}, false);
         }
         file_ << "\n";
     }
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

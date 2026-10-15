@@ -12,7 +12,7 @@
 #include <opencv2/core.hpp>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 TagTracker::TagTracker() = default;
 
@@ -28,7 +28,7 @@ TagTracker::TagTracker(const std::string &settings_file)
     if(!node.empty())
         verbose_ = static_cast<int>(node) != 0;
 
-    // Tag.export=1 时启用导出；目录默认 tag_export，可用 Tag.export_dir 覆盖
+    // Export is enabled when Tag.export=1; the directory defaults to tag_export and can be overridden by Tag.export_dir
     bool enable_export = false;
     node = fs["Tag.export"];
     if(!node.empty())
@@ -140,7 +140,7 @@ void TagTracker::SelectReferenceKeyFrame(const Frame &frame, Map &map)
 {
     (void)frame;
     (void)map;
-    // 休眠：完整共视参考 KF 选择尚未接入真实 Map/KF
+    // Dormant: full covisible reference-KF selection is not yet wired to the real Map/KF
     has_reference_key_frame_ = false;
     reference_key_frame_id_ = 0;
 }
@@ -168,7 +168,7 @@ bool TagTracker::Track(Frame &frame, Map &map)
 {
     (void)frame;
     (void)map;
-    // 休眠：Tag 跟踪尚未接入 Tracking 主循环
+    // Dormant: Tag tracking is not yet wired into the Tracking main loop
     return false;
 }
 
@@ -176,9 +176,9 @@ bool TagTracker::Relocalize(Frame &frame, Map &map)
 {
     (void)frame;
     (void)map;
-    // TODO: Tag 重定位
+    // TODO: Tag relocalization
     return false;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

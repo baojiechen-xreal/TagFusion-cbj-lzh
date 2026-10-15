@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -17,7 +17,7 @@ std::array<Eigen::Vector3f, 4> CornersFromPose(const Sophus::SE3f &T_wt,
     if(tag_size <= 0.0f)
         return corners;
 
-    // 与 OpenCV IPPE_SQUARE / BuildSquareObjectPoints 约定一致
+    // Matches the OpenCV IPPE_SQUARE / BuildSquareObjectPoints convention
     const float h = tag_size * 0.5f;
     const Eigen::Vector3f pts_t[4] = {
         Eigen::Vector3f(-h,  h, 0.f),
@@ -164,8 +164,8 @@ void MapTagData::AddObservationInternal(KeyFrame *key_frame, int left_index, int
         return;
     std::unique_lock<std::mutex> lock(mutex_features_);
     KeyFrameObservation obs;
-    obs.left_index_ = left_index;
-    obs.right_index_ = right_index;
+    obs.left_index = left_index;
+    obs.right_index = right_index;
     observations_[key_frame] = obs;
 }
 
@@ -244,7 +244,7 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
 
     auto countCornerInliers = [](const TagObservation &obs) -> int {
         int nIn = 0;
-        for(bool outlier : obs.corner_outliers_)
+        for(bool outlier : obs.corner_outliers)
         {
             if(!outlier)
                 ++nIn;
@@ -263,25 +263,25 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
         bool opt_quality = false;
 
         const TagObservation *cams[2] = {
-            observationAt(key_frame, kv.second.left_index_, false),
-            observationAt(key_frame, kv.second.right_index_, true)};
+            observationAt(key_frame, kv.second.left_index, false),
+            observationAt(key_frame, kv.second.right_index, true)};
         for(const TagObservation *obs : cams)
         {
             if(!obs || !obs->IsDetectValid())
                 continue;
             detect_valid = true;
 
-            // 第二层：已消歧
-            if(obs->IsAmbiguityResolved() && obs->pose_estimate_.has_value() &&
-               obs->pose_estimate_->GetSelectedCandidate() != nullptr)
+            // Layer 2: already disambiguated
+            if(obs->IsAmbiguityResolved() && obs->pose_estimate.has_value() &&
+               obs->pose_estimate->GetSelectedCandidate() != nullptr)
                 resolved = true;
 
-            // 第三层：优化内点质量
-            if(!obs->is_optimization_outlier_ && countCornerInliers(*obs) >= min_inlier_corners)
+            // Layer 3: optimization-inlier quality
+            if(!obs->is_optimization_outlier && countCornerInliers(*obs) >= min_inlier_corners)
                 opt_quality = true;
         }
 
-        // 第一层：至少一目检测有效，否则该 KF 不能作为参考
+        // Layer 1: at least one eye must be detect-valid, otherwise this KF cannot be the reference
         if(!detect_valid)
             continue;
 
@@ -296,7 +296,7 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
     if(candidates.empty())
         return nullptr;
 
-    // 第二层：存在已消歧参考 KF 时，不再从未消歧 KF 中选择
+    // Layer 2: once a disambiguated reference KF exists, do not select from unresolved KFs
     bool any_resolved = false;
     for(const Candidate &c : candidates)
     {
@@ -314,11 +314,11 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
     }
     else if(!allow_unresolved_fallback)
     {
-        // 回环锚点：全部历史观测未消歧时不回退
+        // Loop anchor: do not fall back when every historical observation is unresolved
         return nullptr;
     }
 
-    // 第三层：若池中存在优化内点合格的 KF，则只在其中选择
+    // Layer 3: if the pool contains a KF that passes the optimization-inlier test, select only among those KFs
     bool any_opt_quality = false;
     for(const Candidate &c : candidates)
     {
@@ -335,10 +335,10 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
                          candidates.end());
     }
 
-    // TODO 第四层：几何质量（IPPE 重投影误差、Tag 面积、左右目一致、
-    // decision_margin_、hamming_）。当前空出，不参与排序。
+    // TODO layer 4: geometric quality (IPPE reprojection error, Tag area, left/right agreement,
+    // decision_margin, hamming). Currently left empty and not used for ranking.
 
-    // 第五层：同等 Tag 质量下用 ORB 地图稳定性排序
+    // Layer 5: when Tag quality is equal, rank by ORB map stability
     KeyFrame *best = nullptr;
     int best_tracked = -1;
     for(const Candidate &c : candidates)
@@ -352,5 +352,5 @@ KeyFrame *MapTagData::SelectReferenceKeyFrame(int min_inlier_corners,
     return best;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

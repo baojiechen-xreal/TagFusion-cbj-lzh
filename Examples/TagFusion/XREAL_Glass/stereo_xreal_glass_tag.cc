@@ -160,7 +160,7 @@ void LoadImages(const string &seqPath,
 
         const string leftFile = leftPath + "/" + name;
         const string rightFile = rightPath + "/" + name;
-        // 不在加载阶段逐张 stat，缺图留到 imread 再报错。
+        // Do not stat each image while loading; a missing image is reported later by imread.
 
         vTimeStamps.push_back(t);
         vstrImageLeft.push_back(leftFile);

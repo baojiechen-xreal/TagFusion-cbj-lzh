@@ -197,7 +197,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
                                      mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD, strSequence);
-    mpLocalMapper->SetTagLocalBAParams(tag::TagLocalBAParams::FromSettings(strSettingsFile));
+    mpLocalMapper->SetTagLocalBAParams(xreal_tag::TagLocalBAParams::FromSettings(strSettingsFile));
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
         mpLocalMapper->mThFarPoints = settings_->thFarPoints();
@@ -214,8 +214,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //Initialize the Loop Closing thread and launch
     // mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
     mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC);
-    mpLoopCloser->SetTagLoopParams(tag::TagLoopParams::FromSettings(strSettingsFile));
-    mpLoopCloser->SetTagLocalBAParams(tag::TagLocalBAParams::FromSettings(strSettingsFile));
+    mpLoopCloser->SetTagLoopParams(xreal_tag::TagLoopParams::FromSettings(strSettingsFile));
+    mpLoopCloser->SetTagLocalBAParams(xreal_tag::TagLocalBAParams::FromSettings(strSettingsFile));
 
     //Set pointers between modules
     mpTracker->SetLocalMapper(mpLocalMapper);
@@ -365,13 +365,13 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
             mpTracker->GrabImuData(vImuMeas[i_imu]);
 
     cout << "[Frame " << Frame::nNextId << "] Tracking begin" << endl;
-    // 正式track双目图像入口
+    // Entry that tracks the stereo images
     const auto t_front0 = std::chrono::steady_clock::now();
     Sophus::SE3f Tcw = mpTracker->GrabImageStereo(imLeftToFeed,imRightToFeed,timestamp,filename);
     const double frontend_ms = std::chrono::duration<double, std::milli>(
                                    std::chrono::steady_clock::now() - t_front0)
                                    .count();
-    // track结束，调用优化模块进行处理
+    // Tracking finished; hand the result to the optimizer
     return AfterGrabImage(Tcw, frontend_ms);
 }
 
@@ -574,7 +574,7 @@ void System::Shutdown()
         SaveAtlas(FileType::BINARY_FILE);
     }
 
-    // 导出 MapTag 四角点与相机轨迹
+    // Export MapTag corners and the camera trajectory
     if(mpTracker)
         mpTracker->SaveTagExports();
 
@@ -602,8 +602,8 @@ bool System::isShutDown() {
 void System::SaveTrajectoryTUM(const string &filename)
 {
     cout << endl << "Saving camera trajectory to " << filename << " ..." << endl;
-    /* TagFusion / XREAL Glass 等单目评测需要与 TUM/真值相同的「秒」时间戳。
-       原先禁止 monocular；与 SaveTrajectoryEuRoC 一样放开。 */
+    /* TagFusion / XREAL Glass and other monocular evaluations need the same second-unit timestamps as TUM/ground truth.
+       Monocular was previously forbidden; allow it, as in SaveTrajectoryEuRoC. */
     /*if(mSensor==MONOCULAR)
     {
         cerr << "ERROR: SaveTrajectoryTUM cannot be used for monocular." << endl;

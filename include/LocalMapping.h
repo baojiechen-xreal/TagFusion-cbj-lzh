@@ -34,9 +34,9 @@
 namespace ORB_SLAM3
 {
 
-namespace tag {
+namespace xreal_tag {
 class MapTagData;
-}  // namespace tag
+}  // namespace xreal_tag
 
 class System;
 class Tracking;
@@ -53,7 +53,7 @@ public:
 
     void SetTracker(Tracking* pTracker);
 
-    void SetTagLocalBAParams(const tag::TagLocalBAParams &params);
+    void SetTagLocalBAParams(const xreal_tag::TagLocalBAParams &params);
 
     // Offline synchronous processing (replaces the old Run() thread loop)
     bool ProcessOneKeyFrame();
@@ -149,13 +149,13 @@ protected:
     void ProcessNewKeyFrame();
     void CreateNewMapPoints();
 
-    // KF 入 Map 后：创建/查找 MapTag，并与当前 KF 建立双向关联
+    // After the KF enters the Map: create or find the MapTag and associate it both ways with the current KF
     void AssociateTagObservations(KeyFrame *pKF);
-    // 用 KF 上消歧后的 IPPE 估计 MapTag 世界位姿初值（优先左目）
-    bool InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
+    // Estimate the MapTag world-pose initial value from the disambiguated IPPE on the KF (prefer the left camera)
+    bool InitializeMapTagPose(xreal_tag::MapTagData *pTag, KeyFrame *pKF,
                               int leftIndex, int rightIndex) const;
-    // 多帧联合消歧：基线筛选有效 KF，遍历 IPPE 假设交叉重投影，成功则写 pose 并转 ACTIVE
-    bool TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) const;
+    // Multi-frame joint disambiguation: filter valid KFs by baseline, try IPPE hypotheses with cross reprojection, then write the pose and switch to ACTIVE on success
+    bool TryResolveMapTagAmbiguityMultiFrame(xreal_tag::MapTagData *pTag) const;
 
     void MapPointCulling();
     void SearchInNeighbors();
@@ -183,7 +183,7 @@ protected:
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
 
-    tag::TagLocalBAParams tag_local_ba_params_;
+    xreal_tag::TagLocalBAParams tag_local_ba_params_;
 
     std::list<KeyFrame*> mlNewKeyFrames;
 

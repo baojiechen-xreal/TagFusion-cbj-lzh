@@ -14,7 +14,7 @@
 #include <utility>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -119,7 +119,7 @@ void TagViewer::Update(const cv::Mat &image,
     if(frozen_.load())
         return;
 
-    cv::Mat vis = tag::DrawTags(image, frame_data);
+    cv::Mat vis = xreal_tag::DrawTags(image, frame_data);
     if(vis.empty() && !image.empty())
     {
         if(image.channels() == 1)
@@ -276,7 +276,7 @@ void TagViewer::DrawTagSquare(const TagVis &tag) const
     if(!tag.has_corners)
         return;
 
-    // 与 AprilTagVisualizer 边颜色一致：绿 / 黄 / 橙 / 蓝
+    // Edge colors match AprilTagVisualizer: green / yellow / orange / blue
     const float edge_rgb[4][3] = {
         {0.0f, 1.0f, 0.0f},
         {1.0f, 1.0f, 0.0f},
@@ -296,7 +296,7 @@ void TagViewer::DrawTagSquare(const TagVis &tag) const
     }
     glEnd();
 
-    // 半透明填充区分 FIXED / UNFIXED
+    // A translucent fill distinguishes FIXED / UNFIXED
     if(tag.fixed)
         glColor4f(0.15f, 0.85f, 0.25f, 0.25f);
     else
@@ -311,7 +311,7 @@ void TagViewer::DrawTagSquare(const TagVis &tag) const
         glVertex3f(p.x(), p.y(), p.z());
     }
     glEnd();
-    // 保持 BLEND 开启：GlFont 使用 GL_ALPHA 纹理，关掉会变成实心方块
+    // Keep BLEND enabled: GlFont uses a GL_ALPHA texture, and turning blending off draws solid blocks
 
     if(tag.has_pose)
         DrawAxes(tag.T_wt, camera_size_ * 0.6f);
@@ -329,7 +329,7 @@ void TagViewer::DrawTagId(const TagVis &tag) const
             center += tag.corners[k];
         center *= 0.25f;
 
-        // 沿法向略抬起，避免与平面 z-fight
+        // Lift slightly along the normal to avoid z-fight with the plane
         const Eigen::Vector3f e0 = tag.corners[1] - tag.corners[0];
         const Eigen::Vector3f e1 = tag.corners[3] - tag.corners[0];
         Eigen::Vector3f n = e0.cross(e1);
@@ -341,7 +341,7 @@ void TagViewer::DrawTagId(const TagVis &tag) const
         center = tag.T_wt.translation();
     }
 
-    // GlFont 依赖 alpha 混合；并清掉可能残留的 2D 纹理绑定
+    // GlFont depends on alpha blending; also clear any leftover 2D texture binding
     GLboolean blend_was_on = GL_FALSE;
     glGetBooleanv(GL_BLEND, &blend_was_on);
     glEnable(GL_BLEND);
@@ -364,7 +364,7 @@ void TagViewer::Run()
     constexpr int kWinW = 1400;
     constexpr int kWinH = 720;
     constexpr int kMenuW = 160;
-    // 左侧图像区：菜单右侧到窗口 52%；宽高比按真实图像动态设置，保证完整显示
+    // Left image panel: from the right edge of the menu to 52% of the window; the aspect ratio follows the real image so it is shown in full
     constexpr float kImageRight = 0.52f;
 
     pangolin::CreateWindowAndBind("ORB-SLAM3: Tag Viewer", kWinW, kWinH);
@@ -422,7 +422,7 @@ void TagViewer::Run()
             kf_twc = key_frame_twc_;
         }
 
-        // 左侧检测图：按图像真实宽高比 letterbox，完整显示
+        // Left detection image: letterbox at the true image aspect ratio and show it in full
         if(!image.empty())
         {
             d_img.SetAspect(static_cast<double>(image.cols) /
@@ -443,7 +443,7 @@ void TagViewer::Run()
             glDisable(GL_DEPTH_TEST);
             d_img.Activate();
             glColor3f(1.0f, 1.0f, 1.0f);
-            // 宽非 4 对齐（如 612）时默认 UNPACK_ALIGNMENT=4 会错位/裁切
+            // When the width is not a multiple of 4 (for example 612), the default UNPACK_ALIGNMENT=4 misaligns or clips the image
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             tex.Upload(rgb.data, GL_RGB, GL_UNSIGNED_BYTE);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -451,7 +451,7 @@ void TagViewer::Run()
             glEnable(GL_DEPTH_TEST);
         }
 
-        // 跟随当前相机
+        // Follow the current camera
         if(menu_follow && has_pose)
         {
             const Sophus::SE3f Twc = Tcw.inverse();
@@ -467,7 +467,7 @@ void TagViewer::Run()
         d_cam.Activate(s_cam);
         glEnable(GL_DEPTH_TEST);
 
-        // 世界坐标轴
+        // World-frame axes
         glLineWidth(1.5f);
         glBegin(GL_LINES);
         glColor3f(0.6f, 0.1f, 0.1f);
@@ -518,7 +518,7 @@ void TagViewer::Run()
             DrawAxes(Twc, camera_size_);
         }
 
-        // ID 放在最后画：GlText::Draw 会临时切到 DisplayBase
+        // Draw each ID last: GlText::Draw temporarily switches to DisplayBase
         if(menu_show_tags && menu_show_ids)
         {
             for(const TagVis &tag : tags)
@@ -535,5 +535,5 @@ void TagViewer::Run()
     std::cout << "[TagViewer] finished" << std::endl;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

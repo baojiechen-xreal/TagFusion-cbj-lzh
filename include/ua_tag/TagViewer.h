@@ -18,9 +18,9 @@ namespace ORB_SLAM3 {
 
 class Map;
 
-namespace tag {
+namespace xreal_tag {
 
-// Tag 专用可视化：左 AprilTag 检测图，右 Tag 地图 + 相机轨迹（独立 Pangolin 窗口）
+// Tag-only visualization: AprilTag detection image on the left, tag map + camera trajectory on the right (separate Pangolin window)
 class TagViewer
 {
 public:
@@ -34,11 +34,11 @@ public:
     void RequestFinish();
     bool IsFinished() const;
 
-    // 冻结后忽略后续 Update（用于只展示初始化两帧 pose + MapTag）
+    // Once frozen, ignore later Update calls (used to show only the two init-frame pose + MapTag)
     void Freeze();
     bool IsFrozen() const;
 
-    // 内部拷贝图像/位姿/MapTag 快照，不持有外部指针
+    // Copies image / pose / MapTag snapshots internally and does not hold external pointers
     // tracking_state: Tracking::eTrackingState
     void Update(const cv::Mat &image,
                 const TagFrameData &frame_data,
@@ -90,7 +90,7 @@ private:
     float viewpoint_f_ = 500.0f;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

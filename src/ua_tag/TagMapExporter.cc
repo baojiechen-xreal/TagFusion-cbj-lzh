@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -39,36 +39,36 @@ bool EnsureDir(const std::string &dirPath)
 MapTagData::FactorVizWeight ToVizWeight(const TagFactorWeightSummary &w)
 {
     MapTagData::FactorVizWeight viz;
-    viz.valid_ = w.valid;
-    viz.n_obs_ = w.n_obs;
-    viz.mean_area_ = w.mean_area;
-    viz.mean_w_s_ = w.mean_w_s;
-    viz.mean_w_theta_ = w.mean_w_theta;
-    viz.mean_w_amb_ = w.mean_w_amb;
-    viz.mean_w_obs_ = w.mean_w_obs;
-    viz.mean_w_bar_ = w.mean_w_bar;
-    viz.min_w_bar_ = w.min_w_bar;
-    viz.max_w_bar_ = w.max_w_bar;
-    viz.mean_alpha_w_ = w.mean_alpha_w;
+    viz.valid = w.valid;
+    viz.n_obs = w.n_obs;
+    viz.mean_area = w.mean_area;
+    viz.mean_w_s = w.mean_w_s;
+    viz.mean_w_theta = w.mean_w_theta;
+    viz.mean_w_amb = w.mean_w_amb;
+    viz.mean_w_obs = w.mean_w_obs;
+    viz.mean_w_bar = w.mean_w_bar;
+    viz.min_w_bar = w.min_w_bar;
+    viz.max_w_bar = w.max_w_bar;
+    viz.mean_alpha_w = w.mean_alpha_w;
     return viz;
 }
 
 TagFactorWeightSummary FromVizWeight(const MapTagData::FactorVizWeight &viz)
 {
     TagFactorWeightSummary w;
-    if(!viz.valid_)
+    if(!viz.valid)
         return w;
     w.valid = true;
-    w.n_obs = viz.n_obs_;
-    w.mean_area = viz.mean_area_;
-    w.mean_w_s = viz.mean_w_s_;
-    w.mean_w_theta = viz.mean_w_theta_;
-    w.mean_w_amb = viz.mean_w_amb_;
-    w.mean_w_obs = viz.mean_w_obs_;
-    w.mean_w_bar = viz.mean_w_bar_;
-    w.min_w_bar = viz.min_w_bar_;
-    w.max_w_bar = viz.max_w_bar_;
-    w.mean_alpha_w = viz.mean_alpha_w_;
+    w.n_obs = viz.n_obs;
+    w.mean_area = viz.mean_area;
+    w.mean_w_s = viz.mean_w_s;
+    w.mean_w_theta = viz.mean_w_theta;
+    w.mean_w_amb = viz.mean_w_amb;
+    w.mean_w_obs = viz.mean_w_obs;
+    w.mean_w_bar = viz.mean_w_bar;
+    w.min_w_bar = viz.min_w_bar;
+    w.max_w_bar = viz.max_w_bar;
+    w.mean_alpha_w = viz.mean_alpha_w;
     return w;
 }
 
@@ -127,7 +127,7 @@ TagMapExporter::~TagMapExporter()
 
 bool TagMapExporter::OpenTrajectoryFile()
 {
-    // TUM 轨迹：timestamp tx ty tz qx qy qz qw（Twc）
+    // TUM trajectory: timestamp tx ty tz qx qy qz qw (Twc)
     const std::string path = output_dir_ + "/tag_camera_trajectory.txt";
     trajectory_file_.open(path.c_str(), std::ios::out | std::ios::trunc);
     if(!trajectory_file_.is_open())
@@ -202,7 +202,7 @@ void TagMapExporter::AppendTagDetections(unsigned long frame_id,
 
         float cx = 0.0f;
         float cy = 0.0f;
-        for(const cv::Point2f &p : obs.corners_raw_)
+        for(const cv::Point2f &p : obs.corners_raw)
         {
             cx += p.x;
             cy += p.y;
@@ -213,12 +213,12 @@ void TagMapExporter::AppendTagDetections(unsigned long frame_id,
         detection_file_ << frame_id << ","
                  << std::setprecision(6) << timestamp << ","
                  << cam << ","
-                 << obs.tag_id_ << ","
-                 << std::setprecision(3) << obs.observed_area_ << ","
-                 << obs.observed_perimeter_ << ","
-                 << obs.hamming_ << ","
+                 << obs.tag_id << ","
+                 << std::setprecision(3) << obs.observed_area << ","
+                 << obs.observed_perimeter << ","
+                 << obs.hamming << ","
                  << cx << "," << cy;
-        for(const cv::Point2f &p : obs.corners_raw_)
+        for(const cv::Point2f &p : obs.corners_raw)
             detection_file_ << "," << p.x << "," << p.y;
         detection_file_ << "\n";
     };
@@ -245,31 +245,31 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
 
     auto resolve_Tct = [&](const TagObservation &obs, bool is_right,
                            Sophus::SE3f &T_ct, const char *&pose_source) -> bool {
-        if(obs.pose_estimate_.has_value() && obs.pose_estimate_->GetSelectedCandidate())
+        if(obs.pose_estimate.has_value() && obs.pose_estimate->GetSelectedCandidate())
         {
-            T_ct = obs.pose_estimate_->GetSelectedCandidate()->t_ct_;
+            T_ct = obs.pose_estimate->GetSelectedCandidate()->t_ct;
             pose_source = "selected";
             return true;
         }
-        if(obs.pose_estimate_.has_value())
+        if(obs.pose_estimate.has_value())
         {
             int best = -1;
             float best_err = std::numeric_limits<float>::infinity();
             for(int i = 0; i < 2; ++i)
             {
-                const TagPoseCandidate &c = obs.pose_estimate_->candidates_[i];
-                if(!c.valid_)
+                const TagPoseCandidate &c = obs.pose_estimate->candidates[i];
+                if(!c.valid)
                     continue;
-                if(c.reprojection_error_ >= 0.0f &&
-                   c.reprojection_error_ < best_err)
+                if(c.reprojection_error >= 0.0f &&
+                   c.reprojection_error < best_err)
                 {
-                    best_err = c.reprojection_error_;
+                    best_err = c.reprojection_error;
                     best = i;
                 }
             }
             if(best >= 0)
             {
-                T_ct = obs.pose_estimate_->candidates_[best].t_ct_;
+                T_ct = obs.pose_estimate->candidates[best].t_ct;
                 pose_source = "best_ippe";
                 return true;
             }
@@ -303,7 +303,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
                       << cam << ","
                       << (map_has_pose ? 1 : 0) << ","
                       << pose_source << ","
-                      << std::setprecision(3) << obs.observed_area_ << ",";
+                      << std::setprecision(3) << obs.observed_area << ",";
 
         if(have_T)
         {
@@ -331,7 +331,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
             std::cout << "[TagFirstReg] tag_id=" << tag_id
                       << " cam=" << cam
                       << " kf_id=" << pKF->mnId
-                      << " area=" << obs.observed_area_
+                      << " area=" << obs.observed_area
                       << " dist_m=" << distance_m
                       << " axis_plane_deg=" << axis_plane_deg
                       << " axis_normal_deg=" << axis_normal_deg
@@ -344,7 +344,7 @@ void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
             std::cout << "[TagFirstReg] tag_id=" << tag_id
                       << " cam=" << cam
                       << " kf_id=" << pKF->mnId
-                      << " area=" << obs.observed_area_
+                      << " area=" << obs.observed_area
                       << " pose_source=none"
                       << std::endl;
         }
@@ -410,7 +410,7 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         << "mean_w_bar,min_w_bar,max_w_bar,mean_alpha_w\n";
 
     std::vector<Map::MapTagPtr> tags = map.GetAllMapTags();
-    // 按 tag_id 排序，便于对比
+    // Sort by tag_id so results are easy to compare
     std::sort(tags.begin(), tags.end(),
               [](const Map::MapTagPtr &a, const Map::MapTagPtr &b) {
                   if(!a)
@@ -466,7 +466,7 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
 
         TagFactorWeightSummary w =
             SummarizeMapTagFactorWeight(*map_tag, factor_weight_);
-        // KF 剔除会清掉 MapTag 观测，但位姿仍在。保留上次有效汇总，避免最终 CSV 变成 n/a。
+        // KF culling clears MapTag observations, but the pose remains. Keep the last valid summary so the final CSV does not become n/a.
         if(w.valid)
         {
             map_tag->SetFactorVizWeight(ToVizWeight(w));
@@ -679,7 +679,7 @@ bool TagMapExporter::WriteFinalMapPly(Map &map,
         const int base = static_cast<int>(verts.size());
         for(int i = 0; i < 4; ++i)
             verts.push_back({c[i].x(), c[i].y(), c[i].z(), r, g, b});
-        // Tag 局部：0=(-h,h), 1=(h,h), 2=(h,-h), 3=(-h,-h)
+        // Tag-local corners: 0=(-h,h), 1=(h,h), 2=(h,-h), 3=(-h,-h)
         faces.push_back({base, base + 1, base + 2, base + 3});
     };
 
@@ -693,7 +693,7 @@ bool TagMapExporter::WriteFinalMapPly(Map &map,
             continue;
         int r = 242, g = 140, b = 26;
         const auto viz = map_tag->GetFactorVizWeight();
-        WeightRgb(viz.mean_w_bar_, viz.valid_, r, g, b);
+        WeightRgb(viz.mean_w_bar, viz.valid, r, g, b);
         if(map_tag->HasWorldCorners())
             append_quad(map_tag->GetWorldCorners(),
                         static_cast<float>(r), static_cast<float>(g),
@@ -827,5 +827,5 @@ void TagMapExporter::ResetSession()
     enabled_ = traj_ok || det_ok || first_ok;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

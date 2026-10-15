@@ -302,7 +302,7 @@ void KeyFrame::AddMapPoint(MapPoint *pMP, const size_t &idx)
     mvpMapPoints[idx]=pMP;
 }
 
-bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
+bool KeyFrame::AddMapTag(xreal_tag::MapTagData *pTag, int leftIndex, int rightIndex)
 {
     if(!pTag)
         return false;
@@ -323,9 +323,9 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
     if(rightIndex >= static_cast<int>(tag_frame_data_.right_.size()))
         return false;
 
-    if(leftIndex >= 0 && tag_frame_data_.left_[leftIndex].tag_id_ != tag_id)
+    if(leftIndex >= 0 && tag_frame_data_.left_[leftIndex].tag_id != tag_id)
         return false;
-    if(rightIndex >= 0 && tag_frame_data_.right_[rightIndex].tag_id_ != tag_id)
+    if(rightIndex >= 0 && tag_frame_data_.right_[rightIndex].tag_id != tag_id)
         return false;
 
     int final_left = leftIndex;
@@ -337,15 +337,15 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
         if(it != mMapTagAssociations.end())
         {
             if(it->second.pMapTag != pTag)
-                return false;  // 同 ID 不同 MapTag：拒绝静默覆盖
+                return false;  // same ID but a different MapTag: refuse to overwrite silently
 
-            // 相同 MapTag：合并左右索引（新有效索引覆盖旧值）
+            // Same MapTag: merge the left/right indices (a new valid index overwrites the old value)
             final_left = (leftIndex >= 0) ? leftIndex : it->second.leftObservationIndex;
             final_right = (rightIndex >= 0) ? rightIndex : it->second.rightObservationIndex;
 
             if(final_left == it->second.leftObservationIndex &&
                final_right == it->second.rightObservationIndex)
-                return true;  // 幂等
+                return true;  // idempotent
         }
 
         MapTagAssociation assoc;
@@ -363,9 +363,9 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
             assoc.historicalObservationCount = pTag->GetObservationCount();
             if(pTag->HasPose() && assoc.historicalObservationCount > 0)
             {
-                // 保存当前 KF 关联前的最新 Tag pose（不是初始化 pose）。这是值拷贝：
-                // 本 KF 随后进入 Local BA 时即便 pTag->SetPose()，该快照仍保持不变，
-                // LoopClosing 因而使用的是本次 LBA 污染前的历史 T_wt。
+                // Save the latest Tag pose from before this KF was associated (not the initialization pose). This is a value copy:
+                // even if pTag->SetPose() runs when this KF later enters Local BA, the snapshot stays unchanged,
+                // so LoopClosing uses the historical T_wt from before this LBA contaminated it.
                 assoc.historicalTagPose = pTag->GetPose();
                 assoc.hasHistoricalTagPose = true;
             }
@@ -373,14 +373,14 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
         mMapTagAssociations[tag_id] = assoc;
     }
 
-    // 建立 Tag 与 KF 的关联，把KF的指针给MapTag，这样MapTag就可以通过KF的指针找到KF
+    // Associate the Tag with the KF and pass the KF pointer to the MapTag, so the MapTag can find the KF through that pointer
     pTag->AddObservationInternal(this, final_left, final_right);
     return true;
 }
 
 void KeyFrame::EraseMapTag(int tagId)
 {
-    tag::MapTagData *pTag = nullptr;
+    xreal_tag::MapTagData *pTag = nullptr;
     {
         unique_lock<mutex> lock(mMutexFeatures);
         auto it = mMapTagAssociations.find(tagId);
@@ -396,7 +396,7 @@ void KeyFrame::EraseMapTag(int tagId)
 
 void KeyFrame::EraseAllMapTags()
 {
-    std::vector<tag::MapTagData *> tags;
+    std::vector<xreal_tag::MapTagData *> tags;
     {
         unique_lock<mutex> lock(mMutexFeatures);
         tags.reserve(mMapTagAssociations.size());
@@ -408,21 +408,21 @@ void KeyFrame::EraseAllMapTags()
         mMapTagAssociations.clear();
     }
 
-    for(tag::MapTagData *pTag : tags)
+    for(xreal_tag::MapTagData *pTag : tags)
         pTag->EraseObservationInternal(this);
 }
 
-tag::MapTagData *KeyFrame::GetMapTag(int tagId) const
+xreal_tag::MapTagData *KeyFrame::GetMapTag(int tagId) const
 {
     unique_lock<mutex> lock(mMutexFeatures);
     const auto it = mMapTagAssociations.find(tagId);
     return (it == mMapTagAssociations.end()) ? nullptr : it->second.pMapTag;
 }
 
-std::vector<tag::MapTagData *> KeyFrame::GetMapTagMatches() const
+std::vector<xreal_tag::MapTagData *> KeyFrame::GetMapTagMatches() const
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    std::vector<tag::MapTagData *> out;
+    std::vector<xreal_tag::MapTagData *> out;
     out.reserve(mMapTagAssociations.size());
     for(const auto &kv : mMapTagAssociations)
     {

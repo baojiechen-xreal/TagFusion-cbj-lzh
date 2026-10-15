@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# 启动 XREAL Glass cam0+cam1+imu0 TagFusion（双目+IMU）
+# Launch XREAL Glass cam0+cam1+imu0 TagFusion (stereo + IMU)
 #
-# 用法:
+# Usage:
 #   ./run_xreal_glass_stereo_inertial.sh
 #   ./run_xreal_glass_stereo_inertial.sh /path/to/glass [traj_name]
 #   ./run_xreal_glass_stereo_inertial.sh /path/to/seq_root [traj_name]
 #   SEQ=/path/to/.../raw_data/glass ./run_xreal_glass_stereo_inertial.sh
 #
-# 环境变量（均可选）:
+# Environment variables (all optional):
 #   VOC / SETTINGS / BIN / SEQ
 #
-# IMU 默认读 glass/imu0.txt；yaml 中 IMU.Frequency 须与实测采样率一致（本数据约 1000 Hz）。
+# IMU is read from glass/imu0.txt by default; yaml IMU.Frequency must match the measured rate (about 1000 Hz for this data).
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORB_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 VOC="${VOC:-${ORB_ROOT}/Vocabulary/ORBvoc.txt}"
-SETTINGS="${SETTINGS:-${SCRIPT_DIR}/q3hy_stereo+imu.yaml}"
+SETTINGS="${SETTINGS:-${SCRIPT_DIR}/20260807_stereo+imu.yaml}"
 BIN="${BIN:-${SCRIPT_DIR}/stereo_inertial_xreal_glass_tag}"
 
 DEFAULT_SEQ="/home/geneta/dataset/01-1/raw_data/glass"

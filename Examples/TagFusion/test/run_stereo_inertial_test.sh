@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Run Tank stereo-inertial TagFusion (left/right + imu0.txt).
 #
-# 用法:
+# Usage:
 #   ./run_stereo_inertial_test.sh
 #   ./run_stereo_inertial_test.sh /path/to/short_test [traj_name]
 #
-# 环境变量（均可选）: VOC / SETTINGS / BIN / SEQ
+# Environment variables (all optional): VOC / SETTINGS / BIN / SEQ
 #
-# IMU 默认读 <seq>/imu0.txt；yaml 中 IMU.Frequency 须与实测采样率一致（本数据约 333 Hz）。
-# 若尚无 imu0.txt:
-#   python3 extract_imu_from_bag.py /home/geneta/下载/Tank/rosbag
+# IMU is read from <seq>/imu0.txt by default; IMU.Frequency in the yaml must match the measured rate (~333 Hz here).
+# If imu0.txt is missing:
+#   python3 extract_imu_from_bag.py <tank_rosbag_dir>
 
 set -euo pipefail
 

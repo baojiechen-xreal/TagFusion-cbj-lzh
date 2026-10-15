@@ -15,35 +15,35 @@ namespace ORB_SLAM3 {
 class KeyFrame;
 class Map;
 
-namespace tag {
+namespace xreal_tag {
 
-// MapTag 生命周期状态（转换逻辑后续阶段实现）
+// MapTag lifecycle state (transition logic is implemented in a later stage)
 enum class MapTagState : std::uint8_t
 {
-    CANDIDATE = 0,   // 刚创建，观测不足 / 未消歧
-    ACTIVE,          // 系统自建 Tag，世界位姿可优化（含初始化阶段）
-    FIXED_ANCHOR,    // 仅外部可信世界位姿（测量/标定/加载的 Tag map）
-    BAD              // 已失效，等待从 Map 移除
+    CANDIDATE = 0,   // Just created; observations are insufficient / not yet disambiguated
+    ACTIVE,          // Tag created by the system; world pose is optimizable (including initialization)
+    FIXED_ANCHOR,    // External trusted world pose only (surveyed, calibrated, or loaded Tag map)
+    BAD              // Invalid; waiting to be removed from the Map
 };
 
 /**
- * Map 中的单个 Tag 实体。
+ * A single Tag entity in the Map.
  *
- * 所有权（勿违反销毁顺序：先断 KF↔MapTag，再释放 Map 中的 shared_ptr）：
- *   Map                -> shared_ptr<MapTagData>   唯一持久化所有者
- *   KeyFrame           -> MapTagData*              非拥有
- *   MapTagData::map_  -> Map*                     非拥有
- *   MapTagData 观测    -> KeyFrame*                非拥有
+ * Ownership (do not violate destruction order: unlink KF<->MapTag first, then release the shared_ptr held by the Map):
+ *   Map                -> shared_ptr<MapTagData>   sole persistent owner
+ *   KeyFrame           -> MapTagData*              non-owning
+ *   MapTagData::map_  -> Map*                     non-owning
+ *   MapTagData observations -> KeyFrame*          non-owning
  *
- * 唯一角点测量源：KeyFrame::tag_frame_data_（本类只存左右观测索引）。
+ * Sole source of corner measurements: KeyFrame::tag_frame_data_ (this class stores only the left/right observation indices).
  */
 class MapTagData
 {
 public:
     struct KeyFrameObservation
     {
-        int left_index_ = -1;
-        int right_index_ = -1;
+        int left_index = -1;
+        int right_index = -1;
     };
 
     using KeyFrameObservations = std::map<KeyFrame *, KeyFrameObservation>;
@@ -60,12 +60,12 @@ public:
     Sophus::SE3f GetPose() const;
     bool HasPose() const;
 
-    // 首次赋位姿时冻结的未选中 IPPE 镜像解（世界系 T_wt）；LBA 不更新
+    // Unselected IPPE mirror solution frozen when the pose is first assigned (world-frame T_wt); LBA does not update it
     void SetMirrorPose(const Sophus::SE3f &t_wt);
     Sophus::SE3f GetMirrorPose() const;
     bool HasMirrorPose() const;
 
-    // 按需计算：P_w = T_wt * P_t（需已有 pose 且 tag_size > 0）
+    // Computed on demand: P_w = T_wt * P_t (requires an existing pose and tag_size > 0)
     std::array<Eigen::Vector3f, 4> GetWorldCorners() const;
     bool HasWorldCorners() const;
     std::array<Eigen::Vector3f, 4> GetMirrorWorldCorners() const;
@@ -83,30 +83,30 @@ public:
     std::size_t GetObservationCount() const;
     bool IsEmpty() const { return GetObservationCount() == 0; }
 
-    // 导出 / 在线覆盖时写入：供 Pangolin 在 Tag 上显示 mean w_bar
+    // Written on export / online overwrite so Pangolin can show mean w_bar on the Tag
     struct FactorVizWeight
     {
-        bool valid_ = false;
-        int n_obs_ = 0;
-        float mean_area_ = 0.0f;
-        float mean_w_s_ = 1.0f;
-        float mean_w_theta_ = 1.0f;
-        float mean_w_amb_ = 1.0f;
-        float mean_w_obs_ = 1.0f;
-        float mean_w_bar_ = 1.0f;
-        float min_w_bar_ = 1.0f;
-        float max_w_bar_ = 0.0f;
-        float mean_alpha_w_ = 1.0f;
+        bool valid = false;
+        int n_obs = 0;
+        float mean_area = 0.0f;
+        float mean_w_s = 1.0f;
+        float mean_w_theta = 1.0f;
+        float mean_w_amb = 1.0f;
+        float mean_w_obs = 1.0f;
+        float mean_w_bar = 1.0f;
+        float min_w_bar = 1.0f;
+        float max_w_bar = 0.0f;
+        float mean_alpha_w = 1.0f;
     };
     void SetFactorVizWeight(const FactorVizWeight &w);
     FactorVizWeight GetFactorVizWeight() const;
 
-    // 分层选择参考观测 KF；无合格观测返回 nullptr。
-    // allow_unresolved_fallback: 全部历史观测未消歧时是否允许回退；回环锚点应传 false。
+    // Select the reference observation KF by layers; returns nullptr when none qualifies.
+    // allow_unresolved_fallback: whether to fall back when every historical observation is unresolved; loop anchors should pass false.
     KeyFrame *SelectReferenceKeyFrame(int min_inlier_corners = 3,
                                       bool allow_unresolved_fallback = true) const;
 
-    // Loop closing / GBA 暂存（对齐 MapPoint，不加锁）
+    // Loop-closing / GBA scratch (aligned with MapPoint; not locked)
     unsigned long corrected_by_key_frame_ = 0;
     unsigned long corrected_reference_ = 0;
     Sophus::SE3f twt_gba_;
@@ -122,7 +122,7 @@ private:
 
     // mutex_pose_: twt_ / has_pose_ / twt_mirror_ / has_mirror_pose_ / tag_size_
     mutable std::mutex mutex_pose_;
-    // mutex_features_: observations_ / state_ / factor_viz_weight_；map_ 由 Map 在持有 Map 锁时写入
+    // mutex_features_: observations_ / state_ / factor_viz_weight_; map_ is written by Map while the Map lock is held
     mutable std::mutex mutex_features_;
 
     int id_ = -1;
@@ -142,7 +142,7 @@ private:
     Map *map_ = nullptr;
 };
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3
 
 #endif

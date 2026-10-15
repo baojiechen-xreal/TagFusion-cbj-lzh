@@ -26,7 +26,7 @@
 #endif
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 namespace {
 
@@ -91,7 +91,7 @@ boost::shared_ptr<gtsam::Cal3Fisheye> MakeFisheyeCalib(GeometricCamera *camera)
 struct CornerMeas
 {
     gtsam::Point3 pw;
-    gtsam::Point2 z;  // 鱼眼：corners_raw_；针孔：corners_undistorted_
+    gtsam::Point2 z;  // Fisheye: corners_raw; pinhole: corners_undistorted
     bool use_fisheye = false;
     boost::shared_ptr<gtsam::Cal3_S2> K_pin;
     boost::shared_ptr<gtsam::Cal3Fisheye> K_fish;
@@ -99,8 +99,8 @@ struct CornerMeas
     TagObservation *obs = nullptr;
 };
 
-// init 第二帧 motion-only：容器内 Tag 世界位姿在本优化中临时当作锚点使用，
-// 不要求 MapTagState::FIXED_ANCHOR（初始化 Tag 现为 ACTIVE）。
+// Second-frame motion-only during init: Tag world poses in the container are temporary anchors for this optimization,
+// MapTagState::FIXED_ANCHOR is not required (each initialized Tag is now ACTIVE).
 const MapTagData *FindFixedTagWithCorners(
     const TagOptimizer::TagContainer &fixed_tags, int tag_id)
 {
@@ -153,16 +153,16 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         if(!use_fisheye && !K_pin)
             return;
 
-        const MapTagData *map_tag = FindFixedTagWithCorners(fixed_tags, obs.tag_id_);
+        const MapTagData *map_tag = FindFixedTagWithCorners(fixed_tags, obs.tag_id);
         if(!map_tag)
             return;
 
         if(!obs.IsDetectValid())
             return;
         const auto &pw = map_tag->GetWorldCorners();
-        // 鱼眼：原图像素 + Cal3Fisheye（与 ORB KB / BA 一致）
-        // 针孔：去畸变像素 + Cal3_S2
-        const auto &uv = use_fisheye ? obs.corners_raw_ : obs.corners_undistorted_;
+        // Fisheye: raw-image pixels + Cal3Fisheye (consistent with ORB KB / BA)
+        // Pinhole: undistorted pixels + Cal3_S2
+        const auto &uv = use_fisheye ? obs.corners_raw : obs.corners_undistorted;
 
         for(int i = 0; i < 4; ++i)
         {
@@ -258,33 +258,33 @@ double CornerChi2(const CornerMeas &m, std::size_t idx, const gtsam::Pose3 &Twc)
 
 #endif  // HAS_GTSAM
 
-// 用第二帧上与 fixed_tags 共视的 Tag IPPE，估计 Tcw 初值：Tcw = T_ct * T_wt^{-1}
+// Seed Tcw from Tag IPPE on the second frame that is covisible with fixed_tags: Tcw = T_ct * T_wt^{-1}
 std::optional<Sophus::SE3f> EstimateInitialTcwFromFixedTags(
     const Frame &frame, const TagOptimizer::TagContainer &fixed_tags)
 {
     auto try_obs = [&](const TagObservation &obs) -> std::optional<Sophus::SE3f> {
-        if(!obs.IsDetectValid() || !obs.pose_estimate_.has_value())
+        if(!obs.IsDetectValid() || !obs.pose_estimate.has_value())
             return std::nullopt;
 
-        const auto it = fixed_tags.find(obs.tag_id_);
+        const auto it = fixed_tags.find(obs.tag_id);
         if(it == fixed_tags.end() || !it->second || !it->second->HasPose())
             return std::nullopt;
 
-        const TagPoseEstimate &est = *obs.pose_estimate_;
+        const TagPoseEstimate &est = *obs.pose_estimate;
         const TagPoseCandidate *cand = est.GetSelectedCandidate();
-        if(!cand || !cand->valid_)
+        if(!cand || !cand->valid)
         {
-            if(est.candidates_[0].valid_)
-                cand = &est.candidates_[0];
-            else if(est.candidates_[1].valid_)
-                cand = &est.candidates_[1];
+            if(est.candidates[0].valid)
+                cand = &est.candidates[0];
+            else if(est.candidates[1].valid)
+                cand = &est.candidates[1];
             else
                 return std::nullopt;
         }
 
-        // Tcw 为左目位姿：T_cL_t * T_wt^{-1}；右目 IPPE 先经 T_lr 转到左目
+        // Tcw is the left-camera pose: T_cL_t * T_wt^{-1}; right-camera IPPE is transformed to the left camera by T_lr first
         const Sophus::SE3f T_cL_t = ConvertTagPoseToLeftCamera(
-            obs.camera_id_, cand->t_ct_, frame.GetRelativePoseTlr());
+            obs.camera_id, cand->t_ct, frame.GetRelativePoseTlr());
         return T_cL_t * it->second->GetPose().inverse();
     };
 
@@ -329,7 +329,7 @@ bool TagOptimizer::OptimizePose(Frame &frame,
         return false;
     }
 
-    // 同帧多次优化前清临时外点；检测外点保持不变
+    // Clear temporary outliers before another optimization of the same frame; detection outliers stay unchanged
     frame.tag_frame_data_.ResetOptimizationOutliers();
 
     std::vector<CornerMeas> meas;
@@ -347,7 +347,7 @@ bool TagOptimizer::OptimizePose(Frame &frame,
     for(const CornerMeas &m : meas)
     {
         if(m.obs)
-            covis_tag_ids.insert(m.obs->tag_id_);
+            covis_tag_ids.insert(m.obs->tag_id);
     }
     const int n_covis_tags = static_cast<int>(covis_tag_ids.size());
     if(n_covis_tags <= 0)
@@ -427,7 +427,7 @@ bool TagOptimizer::OptimizePose(Frame &frame,
             ++j;
         }
         if(obs && n_bad >= 3)
-            obs->is_optimization_outlier_ = true;
+            obs->is_optimization_outlier = true;
         i = j;
     }
 
@@ -474,5 +474,5 @@ bool TagOptimizer::OptimizePoseForSecondFrame(
     return true;
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

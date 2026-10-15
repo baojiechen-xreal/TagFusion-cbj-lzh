@@ -62,7 +62,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
     map<long unsigned int, cv::Point2f> mProjectPoints;
     map<long unsigned int, cv::Point2f> mMatchedInImage;
     bool bDrawTags = false;
-    tag::TagFrameData tagFrameData;
+    xreal_tag::TagFrameData tagFrameData;
 
     cv::Scalar standardColor(0,255,0);
     cv::Scalar odometryColor(255,0,0);
@@ -209,7 +209,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
 
 #ifdef HAS_APRILTAG
     if(bDrawTags)
-        tag::OverlayTags(im, tagFrameData, tag::CameraId::LEFT_OR_MONO, imageScale);
+        xreal_tag::OverlayTags(im, tagFrameData, xreal_tag::CameraId::LEFT_OR_MONO, imageScale);
 #endif
 
     if(both)
@@ -232,7 +232,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     int state; // Tracking state
     bool bDrawTags = false;
     bool bFisheyeStereo = false;
-    tag::TagFrameData tagFrameData;
+    xreal_tag::TagFrameData tagFrameData;
     vector<cv::KeyPoint> vLeftKeys;
     vector<float> vuRight;
 
@@ -310,7 +310,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 
         if(bFisheyeStereo && !vbVO.empty() && !vbMap.empty())
         {
-            // 鱼眼双目：右目特征有独立 MapPoint 槽位
+            // Fisheye stereo: right-camera features have their own MapPoint slots
             mnTracked=0;
             mnTrackedVO=0;
             const int n = static_cast<int>(vCurrentKeys.size());
@@ -361,8 +361,8 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
         }
         else if(!bFisheyeStereo)
         {
-            // PinHole 经典双目：右目无独立 MP 槽；用左目跟踪点 + mvuRight 画立体匹配
-            // 先淡画全部右目 ORB，再高亮与左目 Map/VO 对应的立体点
+            // Classic PinHole stereo: the right camera has no independent MP slot; draw stereo matches from tracked left points + mvuRight
+            // Draw every right-camera ORB faintly first, then highlight the stereo points that match left Map/VO points
             for(size_t i = 0; i < vCurrentKeys.size(); ++i)
             {
                 cv::Point2f point = vCurrentKeys[i].pt;
@@ -397,7 +397,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 
 #ifdef HAS_APRILTAG
     if(bDrawTags)
-        tag::OverlayTags(im, tagFrameData, tag::CameraId::RIGHT, imageScale);
+        xreal_tag::OverlayTags(im, tagFrameData, xreal_tag::CameraId::RIGHT, imageScale);
 #endif
 
     cv::putText(im, "R", cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
@@ -412,7 +412,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
 {
     cv::Mat imLeft, imRight;
-    tag::TagFrameData tagFrameData;
+    xreal_tag::TagFrameData tagFrameData;
     bool bDrawTags = false;
     int state = Tracking::NO_IMAGES_YET;
 
@@ -429,7 +429,7 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
     if(imLeft.empty() && imRight.empty())
         return cv::Mat();
 
-    auto preparePanel = [&](cv::Mat &im, tag::CameraId cam, const char *label)
+    auto preparePanel = [&](cv::Mat &im, xreal_tag::CameraId cam, const char *label)
     {
         if(im.empty())
             return;
@@ -443,7 +443,7 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
             cv::cvtColor(im, im, cv::COLOR_GRAY2BGR);
 #ifdef HAS_APRILTAG
         if(bDrawTags)
-            tag::OverlayTags(im, tagFrameData, cam, imageScale);
+            xreal_tag::OverlayTags(im, tagFrameData, cam, imageScale);
 #else
         (void)cam;
         (void)bDrawTags;
@@ -452,8 +452,8 @@ cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
                     cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
     };
 
-    preparePanel(imLeft, tag::CameraId::LEFT_OR_MONO, "Tag L");
-    preparePanel(imRight, tag::CameraId::RIGHT, "Tag R");
+    preparePanel(imLeft, xreal_tag::CameraId::LEFT_OR_MONO, "Tag L");
+    preparePanel(imRight, xreal_tag::CameraId::RIGHT, "Tag R");
 
     cv::Mat vis;
     if(!imLeft.empty() && !imRight.empty())
@@ -553,7 +553,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     else
         tag_frame_data_.Clear();
 
-    // PinHole 经典双目 Nleft==-1：mvpMapPoints 仅覆盖左目；鱼眼双目才是 left+right
+    // Classic PinHole stereo with Nleft==-1: mvpMapPoints covers the left camera only; only fisheye stereo is left+right
     mbFisheyeStereo = (pTracker->mCurrentFrame.Nleft != -1);
 
     if(both){

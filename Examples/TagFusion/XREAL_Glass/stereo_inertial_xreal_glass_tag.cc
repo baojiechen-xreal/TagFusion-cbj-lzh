@@ -199,8 +199,8 @@ void LoadImages(const string &seqPath,
 
         const string leftFile = leftPath + "/" + name;
         const string rightFile = rightPath + "/" + name;
-        // timestamps.txt 已经给出左右同名文件。不要在这里对每帧 stat：
-        // 一条序列大约 2 万帧，在 NFS 上就是数万次元数据请求。缺图留到 imread 再报错。
+        // timestamps.txt already names the same file on both cameras. Do not stat every frame here:
+        // one sequence is about 20k frames, which is tens of thousands of NFS metadata calls. A missing image is reported later by imread.
 
         vTimeStamps.push_back(t);
         vstrImageLeft.push_back(leftFile);
@@ -292,7 +292,7 @@ int main(int argc, char **argv)
              << endl;
         cerr << "Example:" << endl;
         cerr << "  ./stereo_inertial_xreal_glass_tag Vocabulary/ORBvoc.txt "
-                "Examples/TagFusion/XREAL_Glass/q3hy_stereo+imu.yaml "
+                "Examples/TagFusion/XREAL_Glass/20260807_stereo+imu.yaml "
                 "/home/geneta/dataset/01-1/raw_data/glass"
              << endl;
         return 1;

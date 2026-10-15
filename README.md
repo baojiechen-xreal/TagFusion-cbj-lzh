@@ -135,10 +135,10 @@ ln -sfn imu.txt <sequence>/raw_data/glass/imu0.txt
 ## Settings files
 Settings files are in *Examples/TagFusion/XREAL_Glass*. **The settings file must match the capture date of the sequence**, since resolution, frame rate, calibration and tag size differ between batches:
 
-* **20260819**: `0819_ror_pat_led_f_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
-* **20260812**: `q3fl_5f_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.144 m with per-id overrides)
-* **20260807**: `01-1_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
-* **20260309**: `0309_01-1_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.06 m)
+* **20260819**: `20260819_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
+* **20260812**: `20260812_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.144 m with per-id overrides)
+* **20260807**: `20260807_stereo+imu.yaml` (640x512 @ 60 fps, tag size 0.144 m)
+* **20260309**: `20260309_stereo+imu.yaml` (480x640 @ 30 fps, tag size 0.06 m)
 
 The most relevant parameters are:
 
@@ -154,12 +154,12 @@ The most relevant parameters are:
 Execute the following, choosing the settings file according to the capture date:
 ```
 cd Examples/TagFusion/XREAL_Glass
-SETTINGS=./0309_01-1_stereo+imu.yaml ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309
+SETTINGS=./20260309_stereo+imu.yaml ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309
 ```
 
 The script changes to its own folder, so all outputs are written to *Examples/TagFusion/XREAL_Glass*. The defaults can be overridden with the environment variables `VOC`, `SETTINGS`, `BIN` and `SEQ`. For a stereo-only run use `run_xreal_glass_stereo.sh`. Long sequences can be run in background:
 ```
-SETTINGS=./0309_01-1_stereo+imu.yaml nohup ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309 > run_0309.log 2>&1 &
+SETTINGS=./20260309_stereo+imu.yaml nohup ./run_xreal_glass_stereo_inertial.sh <sequence>/raw_data/glass test_0309 > run_0309.log 2>&1 &
 grep -c "Tracking begin" run_0309.log    # processed frames
 pkill -f stereo_inertial_xreal_glass_tag  # stop the run
 ```

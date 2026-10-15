@@ -3,11 +3,11 @@
 #include <utility>
 
 namespace ORB_SLAM3 {
-namespace tag {
+namespace xreal_tag {
 
 void TagFrameData::Add(TagObservation observation)
 {
-    if(observation.camera_id_ == CameraId::RIGHT)
+    if(observation.camera_id == CameraId::RIGHT)
         right_.push_back(std::move(observation));
     else
         left_.push_back(std::move(observation));
@@ -20,7 +20,7 @@ const TagObservation *TagFrameData::Find(int tag_id, CameraId camera_id) const n
 
     for(const TagObservation &o : obs)
     {
-        if(o.tag_id_ == tag_id)
+        if(o.tag_id == tag_id)
             return &o;
     }
     return nullptr;
@@ -32,7 +32,7 @@ TagObservation *TagFrameData::Find(int tag_id, CameraId camera_id) noexcept
 
     for(TagObservation &o : obs)
     {
-        if(o.tag_id_ == tag_id)
+        if(o.tag_id == tag_id)
             return &o;
     }
     return nullptr;
@@ -46,16 +46,16 @@ bool TagFrameData::WriteBackSelectedCandidate(int tag_id, CameraId camera_id,
         return false;
 
     TagObservation *obs = Find(tag_id, camera_id);
-    if(!obs || !obs->pose_estimate_.has_value())
+    if(!obs || !obs->pose_estimate.has_value())
         return false;
 
-    TagPoseEstimate &est = *obs->pose_estimate_;
-    if(!est.candidates_[selected_candidate].valid_)
+    TagPoseEstimate &est = *obs->pose_estimate;
+    if(!est.candidates[selected_candidate].valid)
         return false;
 
-    est.selected_candidate_ = selected_candidate;
+    est.selected_candidate = selected_candidate;
     if(t_ct)
-        est.candidates_[selected_candidate].t_ct_ = *t_ct;
+        est.candidates[selected_candidate].t_ct = *t_ct;
     return true;
 }
 
@@ -83,5 +83,5 @@ std::size_t TagFrameData::GetSize() const noexcept
     return left_.size() + right_.size();
 }
 
-}  // namespace tag
+}  // namespace xreal_tag
 }  // namespace ORB_SLAM3

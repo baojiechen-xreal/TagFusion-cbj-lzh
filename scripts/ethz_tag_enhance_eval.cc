@@ -1,6 +1,6 @@
 /**
  * Batch AprilTag recall eval over a full image sequence.
- * Same backend / merge rules as tag::AprilTagDetector::DetectCorners:
+ * Same backend / merge rules as xreal_tag::AprilTagDetector::DetectCorners:
  *   family=tag36h11, hamming=2, black_borders={1,2}, merge by id.
  *
  * Enhancements:

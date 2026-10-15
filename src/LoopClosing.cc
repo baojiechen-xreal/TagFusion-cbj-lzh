@@ -98,7 +98,7 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
     mpLocalMapper=pLocalMapper;
 }
 
-void LoopClosing::SetTagLoopParams(const tag::TagLoopParams &params)
+void LoopClosing::SetTagLoopParams(const xreal_tag::TagLoopParams &params)
 {
     tag_loop_params_ = params;
     if(tag_loop_params_.enable)
@@ -114,7 +114,7 @@ void LoopClosing::SetTagLoopParams(const tag::TagLoopParams &params)
     }
 }
 
-void LoopClosing::SetTagLocalBAParams(const tag::TagLocalBAParams &params)
+void LoopClosing::SetTagLocalBAParams(const xreal_tag::TagLocalBAParams &params)
 {
     tag_local_ba_params_ = params;
 }
@@ -372,7 +372,7 @@ bool LoopClosing::ProcessOneKeyFrame()
             Verbose::PrintMess("*Loop detected", Verbose::VERBOSITY_QUIET);
 
             mg2oLoopScw = mg2oLoopSlw;
-            // Tag使用不同的门控阈值
+            // Tag uses a different gating threshold
             if(!tag_loop_detected_ && mpCurrentKF->GetMap()->IsInertial())
             {
                 Sophus::SE3d Twc = mpCurrentKF->GetPoseInverse().cast<double>();
@@ -514,24 +514,24 @@ void PrintTagLoopPair(unsigned long kfId, int tagA, int tagB,
     std::cout << std::endl;
 }
 
-bool TagObservationUsable(const tag::TagObservation &obs)
+bool TagObservationUsable(const xreal_tag::TagObservation &obs)
 {
     return obs.IsDetectValid();
 }
 
-bool TagObservationAtIndexUsable(const std::vector<tag::TagObservation> &observations, int idx)
+bool TagObservationAtIndexUsable(const std::vector<xreal_tag::TagObservation> &observations, int idx)
 {
     return idx >= 0 && idx < static_cast<int>(observations.size()) &&
            TagObservationUsable(observations[idx]);
 }
 
 bool HistoricalTagObservationUsable(const KeyFrame *pKF,
-                                    const tag::MapTagData::KeyFrameObservation &obs)
+                                    const xreal_tag::MapTagData::KeyFrameObservation &obs)
 {
     if(!pKF)
         return false;
-    return TagObservationAtIndexUsable(pKF->tag_frame_data_.left_, obs.left_index_) ||
-           TagObservationAtIndexUsable(pKF->tag_frame_data_.right_, obs.right_index_);
+    return TagObservationAtIndexUsable(pKF->tag_frame_data_.left_, obs.left_index) ||
+           TagObservationAtIndexUsable(pKF->tag_frame_data_.right_, obs.right_index);
 }
 
 bool CurrentTagObservationUsable(const KeyFrame *pKF,
@@ -543,14 +543,14 @@ bool CurrentTagObservationUsable(const KeyFrame *pKF,
            TagObservationAtIndexUsable(pKF->tag_frame_data_.right_, assoc.rightObservationIndex);
 }
 
-float SelectedReprojectionError(const tag::TagObservation *obs)
+float SelectedReprojectionError(const xreal_tag::TagObservation *obs)
 {
-    if(!obs || !obs->IsAmbiguityResolved() || !obs->pose_estimate_)
+    if(!obs || !obs->IsAmbiguityResolved() || !obs->pose_estimate)
         return -1.0f;
-    const tag::TagPoseCandidate *sel = obs->pose_estimate_->GetSelectedCandidate();
+    const xreal_tag::TagPoseCandidate *sel = obs->pose_estimate->GetSelectedCandidate();
     if(!sel)
         return -1.0f;
-    return sel->reprojection_error_;
+    return sel->reprojection_error;
 }
 
 float CurrentTagReprojectionError(const KeyFrame *pKF,
@@ -575,7 +575,7 @@ float CurrentTagReprojectionError(const KeyFrame *pKF,
     return 1e9f;
 }
 
-std::string TagIppeFailReason(const tag::TagObservation *obs, int idx, float maxReproj)
+std::string TagIppeFailReason(const xreal_tag::TagObservation *obs, int idx, float maxReproj)
 {
     if(idx < 0)
         return "no_idx";
@@ -583,14 +583,14 @@ std::string TagIppeFailReason(const tag::TagObservation *obs, int idx, float max
         return "no_obs";
     if(!obs->IsDetectValid())
         return "detect_invalid";
-    if(!obs->pose_estimate_)
+    if(!obs->pose_estimate)
         return "no_ippe";
     if(!obs->IsAmbiguityResolved())
         return "unresolved";
-    const tag::TagPoseCandidate *sel = obs->pose_estimate_->GetSelectedCandidate();
+    const xreal_tag::TagPoseCandidate *sel = obs->pose_estimate->GetSelectedCandidate();
     if(!sel)
         return "no_selected";
-    if(sel->reprojection_error_ < 0.0f || sel->reprojection_error_ > maxReproj)
+    if(sel->reprojection_error < 0.0f || sel->reprojection_error > maxReproj)
         return "reproj";
     return "ok";
 }
@@ -612,34 +612,34 @@ struct TagIppeCamDiag
     Sophus::SE3f Tct;
 };
 
-void FillTagIppeCamDiag(TagIppeCamDiag &d, const tag::TagObservation *obs, int idx,
+void FillTagIppeCamDiag(TagIppeCamDiag &d, const xreal_tag::TagObservation *obs, int idx,
                         float maxReproj, const Sophus::SE3f &Tlr,
                         const Sophus::SE3f &historicalTwt)
 {
     d.idx = idx;
     d.status = TagIppeFailReason(obs, idx, maxReproj);
-    if(!obs || !obs->pose_estimate_)
+    if(!obs || !obs->pose_estimate)
         return;
 
-    const tag::TagPoseEstimate &est = *obs->pose_estimate_;
-    d.selected = est.selected_candidate_;
-    d.amb_ratio = est.ambiguity_ratio_;
-    d.cand0_e = est.candidates_[0].reprojection_error_;
-    d.cand1_e = est.candidates_[1].reprojection_error_;
-    d.cand0_v = est.candidates_[0].valid_ ? 1 : 0;
-    d.cand1_v = est.candidates_[1].valid_ ? 1 : 0;
+    const xreal_tag::TagPoseEstimate &est = *obs->pose_estimate;
+    d.selected = est.selected_candidate;
+    d.amb_ratio = est.ambiguity_ratio;
+    d.cand0_e = est.candidates[0].reprojection_error;
+    d.cand1_e = est.candidates[1].reprojection_error;
+    d.cand0_v = est.candidates[0].valid ? 1 : 0;
+    d.cand1_v = est.candidates[1].valid ? 1 : 0;
 
-    const tag::TagPoseCandidate *sel = est.GetSelectedCandidate();
+    const xreal_tag::TagPoseCandidate *sel = est.GetSelectedCandidate();
     if(!sel && d.selected >= 0 && d.selected < 2 &&
-       est.candidates_[static_cast<size_t>(d.selected)].valid_)
-        sel = &est.candidates_[static_cast<size_t>(d.selected)];
+       est.candidates[static_cast<size_t>(d.selected)].valid)
+        sel = &est.candidates[static_cast<size_t>(d.selected)];
     if(sel)
-        d.reproj = sel->reprojection_error_;
+        d.reproj = sel->reprojection_error;
 
-    // 只要有已选定的 IPPE 解，就算出 Tcw 供诊断；是否用于回环仍看 status==ok。
+    // If an IPPE solution has been selected, compute Tcw for diagnostics; using it for the loop still requires status==ok.
     if(!est.GetSelectedCandidate())
         return;
-    d.Tct = tag::ConvertTagPoseToLeftCamera(obs->camera_id_, est.GetSelectedCandidate()->t_ct_, Tlr);
+    d.Tct = xreal_tag::ConvertTagPoseToLeftCamera(obs->camera_id, est.GetSelectedCandidate()->t_ct, Tlr);
     d.Tcw = d.Tct * historicalTwt.inverse();
     d.hasTcw = true;
     d.usable = (d.status == "ok");
@@ -754,8 +754,8 @@ bool LoopClosing::EstimateTagLoopPose(const KeyFrame::MapTagAssociation &assoc,
     const float maxR = tag_loop_params_.max_stereo_rotation_error;
     const Sophus::SE3f Tlr = mpCurrentKF->GetRelativePoseTlr();
 
-    const tag::TagObservation *obsL = nullptr;
-    const tag::TagObservation *obsR = nullptr;
+    const xreal_tag::TagObservation *obsL = nullptr;
+    const xreal_tag::TagObservation *obsR = nullptr;
     if(assoc.leftObservationIndex >= 0 &&
        assoc.leftObservationIndex < static_cast<int>(mpCurrentKF->tag_frame_data_.left_.size()))
         obsL = &mpCurrentKF->tag_frame_data_.left_[assoc.leftObservationIndex];
@@ -775,7 +775,7 @@ bool LoopClosing::EstimateTagLoopPose(const KeyFrame::MapTagAssociation &assoc,
                            success, reason, chosen, pTcw);
     };
 
-    // 检查双目Tag计算当前T_wc相机pose是否一致
+    // Check whether the current T_wc camera poses computed from the stereo Tag agree
     if(L.usable && R.usable)
     {
         float dtrans = 0.0f;
@@ -884,10 +884,10 @@ void LoopClosing::CollectTagLoopMapPoints(KeyFrame *pMatchedKF, std::vector<MapP
     vpMPs.assign(spMPs.begin(), spMPs.end());
 }
 
-std::vector<tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(KeyFrame *pKF)
+std::vector<xreal_tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(KeyFrame *pKF)
 {
-    // 回环专用快照：角点来自冻结/历史 T_wt，避免 BuildTagMapSnapshot 读到 LBA 后的实时 MapTag 位姿。
-    std::vector<tag::TagPoseConstraint> out;
+    // Loop-only snapshot: corners come from the frozen/historical T_wt so BuildTagMapSnapshot does not read the live MapTag pose after LBA.
+    std::vector<xreal_tag::TagPoseConstraint> out;
     if(!pKF)
         return out;
 
@@ -897,14 +897,14 @@ std::vector<tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(Key
     for(const auto &kv : associations)
     {
         const KeyFrame::MapTagAssociation &assoc = kv.second;
-        tag::MapTagData *pTag = assoc.pMapTag;
+        xreal_tag::MapTagData *pTag = assoc.pMapTag;
         if(!pTag || pTag->IsBad())
             continue;
 
-        const tag::MapTagState state = pTag->GetState();
-        if(state != tag::MapTagState::ACTIVE && state != tag::MapTagState::FIXED_ANCHOR)
+        const xreal_tag::MapTagState state = pTag->GetState();
+        if(state != xreal_tag::MapTagState::ACTIVE && state != xreal_tag::MapTagState::FIXED_ANCHOR)
             continue;
-        // 左右目至少有一个有效二维角点即可，不要求 IPPE / reobservation_gap
+        // One valid 2D corner on the left or the right is enough; IPPE / reobservation_gap is not required
         if(!CurrentTagObservationUsable(pKF, assoc))
             continue;
         if(!assoc.hasHistoricalTagPose)
@@ -914,13 +914,13 @@ std::vector<tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(Key
         if(tagSize <= 0.0f)
             continue;
 
-        // 已冻结的回环参考优先；否则用关联时拷下的 historicalTagPose
+        // Prefer a loop reference that is already frozen; otherwise use the historicalTagPose copied at association time
         Sophus::SE3f historicalTwt = assoc.historicalTagPose;
         const auto itRef = tag_loop_references_.find(pTag->GetId());
         if(itRef != tag_loop_references_.end())
             historicalTwt = itRef->second.frozenTwt;
 
-        // 与 OpenCV IPPE_SQUARE / MapTagData::CornersFromPose 角点顺序一致
+        // Corner order matches OpenCV IPPE_SQUARE / MapTagData::CornersFromPose
         const float h = 0.5f * tagSize;
         const Eigen::Vector3f Xt[4] = {
             Eigen::Vector3f(-h,  h, 0.f),
@@ -928,7 +928,7 @@ std::vector<tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(Key
             Eigen::Vector3f( h, -h, 0.f),
             Eigen::Vector3f(-h, -h, 0.f)};
 
-        tag::TagPoseConstraint c;
+        xreal_tag::TagPoseConstraint c;
         c.tagId = pTag->GetId();
         for(int k = 0; k < 4; ++k)
             c.worldCorners[k] = (historicalTwt * Xt[k]).cast<double>();
@@ -957,7 +957,7 @@ bool LoopClosing::DetectTagLoop()
         return false;
     }
 
-    // 获取一级共视关键帧局部地图
+    // Get the local map of first-order covisibility keyframes
     std::set<KeyFrame*> localKFs;
     localKFs.insert(mpCurrentKF);
     const std::vector<KeyFrame*> vpCov = mpCurrentKF->GetVectorCovisibleKeyFrames();
@@ -968,7 +968,7 @@ bool LoopClosing::DetectTagLoop()
 
     struct TagLoopEstimate
     {
-        tag::MapTagData *pTag = nullptr;
+        xreal_tag::MapTagData *pTag = nullptr;
         KeyFrame *pMatchedKF = nullptr;
         Sophus::SE3f historicalTwt;
         Sophus::SE3f Tct;
@@ -1005,7 +1005,7 @@ bool LoopClosing::DetectTagLoop()
         std::cout << std::endl;
     };
 
-    auto logLiveDelta = [&](const Sophus::SE3f &frozenTwt, tag::MapTagData *pTag) {
+    auto logLiveDelta = [&](const Sophus::SE3f &frozenTwt, xreal_tag::MapTagData *pTag) {
         if(!pTag || !pTag->HasPose())
             return;
         float dtrans = 0.0f;
@@ -1015,7 +1015,7 @@ bool LoopClosing::DetectTagLoop()
                   << " dang_live=" << drot;
     };
 
-    auto findLastObservedKF = [&](tag::MapTagData *pTag) -> KeyFrame* {
+    auto findLastObservedKF = [&](xreal_tag::MapTagData *pTag) -> KeyFrame* {
         KeyFrame *pLastObservedKF = nullptr;
         const auto observations = pTag->GetObservations();
         for(const auto &obsKF : observations)
@@ -1035,7 +1035,7 @@ bool LoopClosing::DetectTagLoop()
         return pLastObservedKF;
     };
 
-    auto selectEarliestHistKF = [&](tag::MapTagData *pTag, std::string &rejectExtra) -> KeyFrame* {
+    auto selectEarliestHistKF = [&](xreal_tag::MapTagData *pTag, std::string &rejectExtra) -> KeyFrame* {
         std::vector<KeyFrame*> candidates;
         int nLocal = 0, nGap = 0, nMps = 0, nUnusable = 0;
         const auto observations = pTag->GetObservations();
@@ -1095,14 +1095,14 @@ bool LoopClosing::DetectTagLoop()
         return pBestHistKF;
     };
 
-    // 遍历当前KF检测到的所有Tag
+    // Iterate over every Tag detected in the current KF
     for(const auto &kv : associations)
     {
         const int tag_id = kv.first;
         const KeyFrame::MapTagAssociation &assoc = kv.second;
-        tag::MapTagData *pTag = assoc.pMapTag;
+        xreal_tag::MapTagData *pTag = assoc.pMapTag;
 
-        // 跳过无效状态Tag
+        // Skip Tags in an invalid state
         if(!pTag || pTag->IsBad() || !pTag->HasPose())
         {
             if(tag_loop_references_.count(tag_id))
@@ -1111,16 +1111,16 @@ bool LoopClosing::DetectTagLoop()
             continue;
         }
 
-        // 跳过无效状态Tag
-        const tag::MapTagState state = pTag->GetState();
-        if(state != tag::MapTagState::ACTIVE && state != tag::MapTagState::FIXED_ANCHOR)
+        // Skip Tags in an invalid state
+        const xreal_tag::MapTagState state = pTag->GetState();
+        if(state != xreal_tag::MapTagState::ACTIVE && state != xreal_tag::MapTagState::FIXED_ANCHOR)
         {
             skipTag(tag_id, "not_active",
                     "state=" + std::to_string(static_cast<int>(state)));
             continue;
         }
 
-        // 跳过当前KF无效观测的Tag
+        // Skip Tags whose observation in the current KF is invalid
         if(!CurrentTagObservationUsable(mpCurrentKF, assoc))
         {
             skipTag(tag_id, "current_obs_unusable",
@@ -1129,7 +1129,7 @@ bool LoopClosing::DetectTagLoop()
             continue;
         }
 
-        // 检查回环冻结参考
+        // Check the frozen loop reference
         auto refIt = tag_loop_references_.find(tag_id);
         bool hasFrozenRef = refIt != tag_loop_references_.end();
         if(hasFrozenRef &&
@@ -1141,7 +1141,7 @@ bool LoopClosing::DetectTagLoop()
             hasFrozenRef = false;
         }
 
-        // Tag 是否出现在当前局部地图。找到一帧即可
+        // Whether the Tag appears in the current local map. Finding one frame is enough
         bool localContainsTag = false;
         const auto observations = pTag->GetObservations();
         for(const auto &obsKF : observations)
@@ -1159,27 +1159,27 @@ bool LoopClosing::DetectTagLoop()
         KeyFrame *pHistKF = nullptr;
         Sophus::SE3f frozenTwt;
 
-        // 若存在回环冻结参考，则直接使用冻结参考的KF和位姿
+        // If a frozen loop reference exists, use that KF and pose directly
         if(hasFrozenRef)
         {
             pHistKF = refIt->second.pHistoricalKF;
             frozenTwt = refIt->second.frozenTwt;
         }
         
-        // 若不存在回环冻结参考，则需要进一步进行判断
+        // If no frozen loop reference exists, more checks are required
         else
         {
-            KeyFrame *pLastObservedKF = findLastObservedKF(pTag); // 找到最近一次有效观测的KF
+            KeyFrame *pLastObservedKF = findLastObservedKF(pTag); // KF of the most recent valid observation
             if(!pLastObservedKF)
             {
                 skipTag(tag_id, "no_last_observation");
                 continue;
             }
-            // 检查最近一次有效观测间隔
+            // Check the gap since the most recent valid observation
             const unsigned long reobservationGap =
                 mpCurrentKF->mnId - pLastObservedKF->mnId;
             if(reobservationGap <
-               // 若最近一次有效观测间隔小于最小最近一次有效观测间隔，则跳过
+               // If the gap since the most recent valid observation is below the minimum, skip
                static_cast<unsigned long>(tag_loop_params_.min_reobservation_gap_kfs))
             {
                 skipTag(tag_id, "reobservation_gap",
@@ -1190,14 +1190,14 @@ bool LoopClosing::DetectTagLoop()
                 continue;
             }
 
-            // 若不存在历史Tag位姿，则跳过
+            // If there is no historical Tag pose, skip
             if(!assoc.hasHistoricalTagPose)
             {
                 skipTag(tag_id, "no_historical_pose",
                         "hist_obs=" + std::to_string(assoc.historicalObservationCount));
                 continue;
             }
-            // 若历史观测次数小于最小历史观测次数，则跳过
+            // If the historical observation count is below the minimum, skip
             if(static_cast<int>(assoc.historicalObservationCount) <
                tag_loop_params_.min_history_observations)
             {
@@ -1207,7 +1207,7 @@ bool LoopClosing::DetectTagLoop()
                 continue;
             }
 
-            // 选择最早的历史KF作为当前帧的回环帧
+            // Choose the earliest historical KF as the loop KF for the current frame
             std::string rejectExtra;
             pHistKF = selectEarliestHistKF(pTag, rejectExtra);
             if(!pHistKF)
@@ -1215,11 +1215,11 @@ bool LoopClosing::DetectTagLoop()
                 skipTag(tag_id, "no_qualified_historical_kf", rejectExtra);
                 continue;
             }
-            // 使用未被污染的历史Tag pose作为回环冻结参考
+            // Use the uncontaminated historical Tag pose as the frozen loop reference
             frozenTwt = assoc.historicalTagPose;
         }
 
-        // 估计Tag回环位姿
+        // Estimate the Tag loop pose
         Sophus::SE3f TcwTag, TctLeft;
         bool bStereoConsistent = false;
         int nValidCameras = 0;
@@ -1234,7 +1234,7 @@ bool LoopClosing::DetectTagLoop()
             continue;
         }
 
-        // 若不存在回环冻结参考（冻结pose计算完毕，需要进行冻结参考更新）
+        // If no frozen loop reference exists (the frozen pose has been computed and the frozen reference must be updated)
         if(!hasFrozenRef)
         {
             TagLoopReference ref;
@@ -1253,7 +1253,7 @@ bool LoopClosing::DetectTagLoop()
             logLiveDelta(frozenTwt, pTag);
             std::cout << std::endl;
         }
-        // 若存在回环冻结参考（直接使用冻结pose）
+        // If a frozen loop reference exists (use the frozen pose directly)
         else
         {
             refIt->second.lastSeenKF = mpCurrentKF->mnId;
@@ -1410,12 +1410,12 @@ bool LoopClosing::DetectTagLoop()
         return a.pTag->GetId() < b.pTag->GetId();
     };
 
-    // 根据不同Tag计算出当前相机pose的差异，筛选出多个计算当前相机pose差异小于指定阈值的Tag集合
+    // From current-camera pose differences across Tags, keep the Tag sets whose computed poses differ by less than the threshold
     std::vector<int> cluster = buildCluster(0);
     for(size_t i = 1; i < estimates.size(); ++i)
     {
         std::vector<int> cand = buildCluster(static_cast<int>(i));
-        // 只选出一个最优的Tag集合
+        // Keep only the single best Tag set
         if(betterCluster(cand, cluster))
             cluster = std::move(cand);
     }
@@ -1449,7 +1449,7 @@ bool LoopClosing::DetectTagLoop()
     }
     const TagLoopEstimate &best = estimates[bestInCluster];
 
-    // 转换为固定尺度的Sim3位姿，并检查Tag计算的Sim3位姿和回环前计算的漂移pose差异是否满足指定条件
+    // Convert to a fixed-scale Sim3 pose, and check that the Tag Sim3 and the pre-loop drift pose differ within the required bounds
     const g2o::Sim3 gScwTag(best.TcwTag.unit_quaternion().cast<double>(),
                             best.TcwTag.translation().cast<double>(), 1.0);
     g2o::Sim3 gScwTag4DoF;
@@ -1461,22 +1461,22 @@ bool LoopClosing::DetectTagLoop()
         return false;
     }
 
-    // 判断本次Tag候选是否可靠
+    // Decide whether this Tag candidate is reliable
     bool bAccept = false;
     const char *acceptReason = "none";
     const unsigned long lastCoinKFId =
         tag_loop_last_current_key_frame_ ? tag_loop_last_current_key_frame_->mnId : 0;
-    if(static_cast<int>(cluster.size()) >= 2) // 多个Tag给出一致的当前KF位姿
+    if(static_cast<int>(cluster.size()) >= 2) // several Tags agree on the current KF pose
     {
         bAccept = true;
         acceptReason = "multi_tag";
     }
-    else if(best.stereoConsistent) // 左右目Tag计算的当前KF位姿一致
+    else if(best.stereoConsistent) // left and right Tag estimates of the current KF pose agree
     {
         bAccept = true;
         acceptReason = "stereo";
     }
-    else // 单Tag、单相机时连续KF验证
+    else // consecutive-KF check when there is a single Tag and a single camera
     {
         if(tag_loop_coincidences_ > 0 && tag_loop_last_current_key_frame_)
         {
@@ -1524,7 +1524,7 @@ bool LoopClosing::DetectTagLoop()
               << " dang=" << (mpCurrentKF->GetPoseInverse() * best.TcwTag).so3().log().norm()
               << std::endl;
 
-    // 保存本次Tag回环候选结果
+    // Save this Tag loop candidate
     if(tag_loop_matched_key_frame_ && tag_loop_matched_key_frame_ != best.pMatchedKF &&
        tag_loop_matched_key_frame_ != mpCurrentKF)
         tag_loop_matched_key_frame_->SetErase();
@@ -1549,12 +1549,12 @@ bool LoopClosing::DetectTagLoop()
         return false;
     }
 
-    // 提交回环前：当前 KF 多 Tag 4DoF pose-only（单顶点 yaw+xyz，两轮 Huber）。
-    // 组级剔除：每相机≥3 角点内点 / 左右合计≥6，且 Tag RMSE≤5px；至少 2 个内点 Tag 才写入 mg2oLoopScw。
-    // 失败则保留 coincidence 候选、不提交。
+    // Before committing the loop: multi-Tag 4DoF pose-only on the current KF (single vertex yaw+xyz, two Huber rounds).
+    // Group rejection: >=3 inlier corners per camera / >=6 across left and right, and Tag RMSE<=5px; write mg2oLoopScw only if at least 2 Tags are inliers.
+    // On failure keep the coincidence candidate and do not commit.
     {
         const auto constraints = BuildTagLoopPoseConstraints(mpCurrentKF);
-        // seed 来自触发 Tag 的 IPPE + ValidateTagLoop 零化 roll/pitch 后的 4DoF Sim3
+        // seed comes from the triggering Tag's IPPE plus the 4DoF Sim3 after ValidateTagLoop zeros roll/pitch
         const Sophus::SE3f seedTcw(
             gScwTag4DoF.rotation().cast<float>(),
             gScwTag4DoF.translation().cast<float>());
@@ -1596,7 +1596,7 @@ bool LoopClosing::DetectTagLoop()
             return false;
         }
 
-        // 用多 Tag 优化后的 4DoF 位姿覆盖 seed，再写入 mg2oLoopScw
+        // Overwrite the seed with the multi-Tag optimized 4DoF pose, then write mg2oLoopScw
         gScwTag4DoF = g2o::Sim3(refinedTcw.unit_quaternion().cast<double>(),
                                 refinedTcw.translation().cast<double>(), 1.0);
         mg2oTagLoopLastScw = gScwTag4DoF;
@@ -1830,7 +1830,7 @@ bool LoopClosing::NewDetectCommonRegions()
         double timeEstSim3 = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndEstSim3_1 - time_StartEstSim3_1).count();
 #endif
 
-    // 检测回环候选
+    // Detect loop candidates
     DetectTagLoop();
 
     if(mbMergeDetected || mbLoopDetected)
@@ -2466,7 +2466,7 @@ void LoopClosing::CorrectLoop()
             const std::vector<Map::MapTagPtr> vpTags = pLoopMap->GetAllMapTags();
             for(const Map::MapTagPtr &pTagPtr : vpTags)
             {
-                tag::MapTagData *pTag = pTagPtr.get();
+                xreal_tag::MapTagData *pTag = pTagPtr.get();
                 if(!pTag || pTag->IsBad() || !pTag->HasPose())
                     continue;
                 if(pTag == mpLoopTag || pTag->IsFixed())
@@ -3611,9 +3611,9 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
         Optimizer::GlobalBundleAdjustemnt(pActiveMap,10,&mbStopGBA,nLoopKF,false);
     else
     {
-        const tag::TagLocalBAParams gbaTagParams =
+        const xreal_tag::TagLocalBAParams gbaTagParams =
             (tag_loop_detected_ && tag_local_ba_params_.enable) ? tag_local_ba_params_
-                                                            : tag::TagLocalBAParams();
+                                                            : xreal_tag::TagLocalBAParams();
         const int fixedLoopTagId = tag_loop_detected_ ? mnLoopTagId : -1;
         Optimizer::FullInertialBA(pActiveMap,7,false,nLoopKF,&mbStopGBA,false,1e2,1e6,NULL,NULL,
                                   gbaTagParams, fixedLoopTagId);
@@ -3804,11 +3804,11 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
                 }
             }
 
-            // 选择参考帧，回环global BA后更新Tag位姿
+            // Select the reference frame and update Tag poses after the loop global BA
             const std::vector<Map::MapTagPtr> vpTags = pActiveMap->GetAllMapTags();
             for(const Map::MapTagPtr &pTagPtr : vpTags)
             {
-                tag::MapTagData *pTag = pTagPtr.get();
+                xreal_tag::MapTagData *pTag = pTagPtr.get();
                 if(!pTag || pTag->IsBad() || !pTag->HasPose())
                     continue;
                 if(tag_loop_detected_ && (pTag == mpLoopTag || pTag->GetId() == mnLoopTagId))
