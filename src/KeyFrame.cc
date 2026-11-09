@@ -1268,6 +1268,27 @@ Sophus::SE3f KeyFrame::GetRelativePoseTlr()
     return mTlr;
 }
 
+void KeyFrame::SetRelativePoseTlr(const Sophus::SE3f &Tlr)
+{
+    unique_lock<mutex> lock(mMutexPose);
+    mTlr = Tlr;
+    mTrl = mTlr.inverse();
+}
+
+void KeyFrame::ApplyBodyCameraExtrinsic(const Sophus::SE3f &Tbc)
+{
+    unique_lock<mutex> lock(mMutexPose);
+    const Sophus::SE3f Twb = mTwc * mImuCalib.mTcb;
+    mImuCalib.mTbc = Tbc;
+    mImuCalib.mTcb = Tbc.inverse();
+    mImuCalib.mbIsSet = true;
+    mTcw = mImuCalib.mTcb * Twb.inverse();
+    mRcw = mTcw.rotationMatrix();
+    mTwc = mTcw.inverse();
+    mRwc = mTwc.rotationMatrix();
+    mOwb = Twb.translation();
+}
+
 Sophus::SE3<float> KeyFrame::GetRightPose() {
     unique_lock<mutex> lock(mMutexPose);
 

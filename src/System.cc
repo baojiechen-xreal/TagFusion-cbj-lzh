@@ -22,6 +22,7 @@
 #include "Converter.h"
 #include "Frame.h"
 #include "KeyFrame.h"
+#include "G2oTypes.h"
 #include "ua_tag/TagPoseConstraints.h"
 #include <cassert>
 #include <chrono>
@@ -198,6 +199,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
                                      mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD, strSequence);
     mpLocalMapper->SetTagLocalBAParams(xreal_tag::TagLocalBAParams::FromSettings(strSettingsFile));
+    mpLocalMapper->LoadKeyFrameCullingPolicy(strSettingsFile);
+    ExtrinsicDrift::LoadSettings(strSettingsFile);
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
         mpLocalMapper->mThFarPoints = settings_->thFarPoints();

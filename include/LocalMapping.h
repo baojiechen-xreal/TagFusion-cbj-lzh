@@ -54,6 +54,7 @@ public:
     void SetTracker(Tracking* pTracker);
 
     void SetTagLocalBAParams(const xreal_tag::TagLocalBAParams &params);
+    void LoadKeyFrameCullingPolicy(const std::string &settingsPath);
 
     // Offline synchronous processing (replaces the old Run() thread loop)
     bool ProcessOneKeyFrame();
@@ -165,6 +166,14 @@ protected:
 
     bool mbMonocular;
     bool mbInertial;
+
+    // Keyframe culling policy. Defaults match the historical hardcoded gates.
+    float mCullRedundantStereoInertial;
+    float mCullProtectRecentS;
+    float mCullMaxMergedIntervalS;
+    float mCullMaxTrans;
+    float mCullMaxRot;
+    bool mCullProtectTag;
 
     void ResetIfRequested();
     bool mbResetRequested;

@@ -916,6 +916,33 @@ public:
 
 bool CheckTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
 
+// One sequence-wide extrinsic correction on top of the calibrated IMU–left and
+// left–right poses. The prior is around the calibration, so a missing yaml key
+// leaves every extrinsic fixed.
+class ExtrinsicDrift
+{
+public:
+    static void LoadSettings(const std::string &settingsPath);
+    static bool Enabled();
+    static double BaselineScale();
+    static void Optimize(const std::vector<KeyFrame*> &keyframes);
+    static void ApplyToTracker(IMU::Calib *calib, Sophus::SE3f &Tlr);
+
+private:
+    static bool enabled_;
+    static bool factory_set_;
+    static Sophus::SE3d Tbc_factory_;
+    static Sophus::SE3d Tlr_factory_;
+    static Sophus::SE3d Tbc_;
+    static Sophus::SE3d Tlr_;
+    static double sigma_rot_bc_;
+    static double sigma_trans_bc_;
+    static double sigma_rot_lr_;
+    static double sigma_trans_lr_;
+    static double baseline_scale_;
+    static int n_solves_;
+};
+
 } //namespace ORB_SLAM2
 
 #endif // G2OTYPES_H

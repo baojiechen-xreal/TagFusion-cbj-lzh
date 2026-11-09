@@ -18,6 +18,8 @@
 
 
 #include "LocalMapping.h"
+
+#include <cmath>
 #include "LoopClosing.h"
 #include "ORBmatcher.h"
 #include "Optimizer.h"
@@ -44,7 +46,10 @@ namespace ORB_SLAM3
 {
 
 LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName):
-    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
+    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial),
+    mCullRedundantStereoInertial(0.5f), mCullProtectRecentS(0.f), mCullMaxMergedIntervalS(0.f),
+    mCullMaxTrans(0.f), mCullMaxRot(0.f), mCullProtectTag(false),
+    mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true),
     mIdxInit(0), mScale(1.0), mInitSect(0), mbNotBA1(true), mbNotBA2(true), mIdxIteration(0), infoInertial(Eigen::MatrixXd::Zero(9,9))
 {
@@ -1479,6 +1484,61 @@ void LocalMapping::InterruptBA()
 {
 }
 
+namespace {
+bool ReadOptionalFloat(cv::FileStorage &fs, const char *key, float &out, bool allowZero)
+{
+    cv::FileNode node = fs[key];
+    if(node.empty())
+        return true;
+    const float v = node;
+    const bool ok = std::isfinite(v) && (allowZero ? v >= 0.f : v > 0.f);
+    if(!ok)
+    {
+        std::cerr << "ERROR: " << key << " must be a finite number "
+                  << (allowZero ? ">= 0" : "> 0") << ", got " << v << std::endl;
+        return false;
+    }
+    out = v;
+    return true;
+}
+}
+
+void LocalMapping::LoadKeyFrameCullingPolicy(const std::string &settingsPath)
+{
+    cv::FileStorage fs(settingsPath, cv::FileStorage::READ);
+    if(!fs.isOpened())
+        return;
+    if(!ReadOptionalFloat(fs, "KeyFrame.culling.stereo_inertial_redundancy_ratio", mCullRedundantStereoInertial, false)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.protect_recent_s", mCullProtectRecentS, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.max_merged_interval_s", mCullMaxMergedIntervalS, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.max_translation_m", mCullMaxTrans, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.max_rotation_deg", mCullMaxRot, true))
+        exit(1);
+    mCullMaxRot = mCullMaxRot * static_cast<float>(M_PI) / 180.f;
+    if(mCullRedundantStereoInertial > 1.f)
+    {
+        std::cerr << "ERROR: KeyFrame.culling.stereo_inertial_redundancy_ratio must be in (0,1]" << std::endl;
+        exit(1);
+    }
+    cv::FileNode tagNode = fs["KeyFrame.culling.protect_tag_support"];
+    if(!tagNode.empty())
+    {
+        const int v = tagNode;
+        if(v != 0 && v != 1)
+        {
+            std::cerr << "ERROR: KeyFrame.culling.protect_tag_support must be 0 or 1, got " << v << std::endl;
+            exit(1);
+        }
+        mCullProtectTag = v == 1;
+    }
+    std::cout << "KeyFrame.culling.stereo_inertial_redundancy_ratio: " << mCullRedundantStereoInertial
+              << " protect_recent_s: " << mCullProtectRecentS
+              << " max_merged_interval_s: " << mCullMaxMergedIntervalS
+              << " max_translation_m: " << mCullMaxTrans
+              << " max_rotation_deg: " << (mCullMaxRot * 180.f / static_cast<float>(M_PI))
+              << " protect_tag_support: " << (mCullProtectTag ? 1 : 0) << std::endl;
+}
+
 void LocalMapping::KeyFrameCulling()
 {
     // Check redundant keyframes (only local keyframes)
@@ -1495,7 +1555,7 @@ void LocalMapping::KeyFrameCulling()
     else if (mbMonocular)
         redundant_th = 0.9;
     else
-        redundant_th = 0.5;
+        redundant_th = mCullRedundantStereoInertial;
 
     const bool bInitImu = mpAtlas->isImuInitialized();
     int count=0;
@@ -1597,11 +1657,33 @@ void LocalMapping::KeyFrameCulling()
                 if(pKF->mnId>(mpCurrentKeyFrame->mnId-2))
                     continue;
 
+                if(mCullProtectTag && !pKF->GetMapTagMatches().empty())
+                    continue;
+
+                if(mCullProtectRecentS>0.f &&
+                   (mpCurrentKeyFrame->mTimeStamp-pKF->mTimeStamp)<mCullProtectRecentS)
+                    continue;
+
                 if(pKF->mPrevKF && pKF->mNextKF)
                 {
                     const float t = pKF->mNextKF->mTimeStamp-pKF->mPrevKF->mTimeStamp;
+                    const bool legacyMerge = (bInitImu && (pKF->mnId<last_ID) && t<3.) || (t<0.5);
+                    const bool cappedMerge = mCullMaxMergedIntervalS>0.f && t<mCullMaxMergedIntervalS;
+                    bool motionMerge = false;
+                    if(mCullMaxTrans>0.f || mCullMaxRot>0.f)
+                    {
+                        const Sophus::SE3f Trel = pKF->mNextKF->GetPose() * pKF->mPrevKF->GetPoseInverse();
+                        const float trans = Trel.translation().norm();
+                        const float rot = Trel.so3().log().norm();
+                        const bool transOk = mCullMaxTrans<=0.f || trans < mCullMaxTrans;
+                        const bool rotOk = mCullMaxRot<=0.f || rot < mCullMaxRot;
+                        motionMerge = transOk && rotOk;
+                    }
+                    const bool allowMerge = (mCullMaxTrans>0.f || mCullMaxRot>0.f)
+                                                ? motionMerge
+                                                : (mCullMaxMergedIntervalS>0.f ? cappedMerge : legacyMerge);
 
-                    if((bInitImu && (pKF->mnId<last_ID) && t<3.) || (t<0.5))
+                    if(allowMerge)
                     {
                         pKF->mNextKF->mpImuPreintegrated->MergePrevious(pKF->mpImuPreintegrated);
                         pKF->mNextKF->mPrevKF = pKF->mPrevKF;
@@ -1610,7 +1692,7 @@ void LocalMapping::KeyFrameCulling()
                         pKF->mPrevKF = NULL;
                         pKF->SetBadFlag();
                     }
-                    else if(!mpCurrentKeyFrame->GetMap()->GetIniertialBA2() && ((pKF->GetImuPosition()-pKF->mPrevKF->GetImuPosition()).norm()<0.02) && (t<3))
+                    else if(mCullMaxTrans<=0.f && mCullMaxRot<=0.f && !mpCurrentKeyFrame->GetMap()->GetIniertialBA2() && ((pKF->GetImuPosition()-pKF->mPrevKF->GetImuPosition()).norm()<0.02) && (mCullMaxMergedIntervalS>0.f ? t<mCullMaxMergedIntervalS : t<3))
                     {
                         pKF->mNextKF->mpImuPreintegrated->MergePrevious(pKF->mpImuPreintegrated);
                         pKF->mNextKF->mPrevKF = pKF->mPrevKF;

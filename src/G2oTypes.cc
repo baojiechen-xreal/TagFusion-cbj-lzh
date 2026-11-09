@@ -19,6 +19,18 @@
 #include "G2oTypes.h"
 #include "ImuTypes.h"
 #include "Converter.h"
+#include "Map.h"
+
+#include <cmath>
+#include <fstream>
+#include <iostream>
+
+#include "Thirdparty/g2o/g2o/core/block_solver.h"
+#include "Thirdparty/g2o/g2o/core/optimization_algorithm_levenberg.h"
+#include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
+#include "Thirdparty/g2o/g2o/core/sparse_optimizer.h"
+#include "Thirdparty/g2o/g2o/solvers/linear_solver_eigen.h"
+
 namespace ORB_SLAM3
 {
 
@@ -51,7 +63,7 @@ ImuCamPose::ImuCamPose(KeyFrame *pKF):its(0)
     Rbc[0] = Rcb[0].transpose();
     tbc[0] = pKF->mImuCalib.mTbc.translation().cast<double>();
     pCamera[0] = pKF->mpCamera;
-    bf = pKF->mbf;
+    bf = pKF->mbf * ExtrinsicDrift::BaselineScale();
 
     if(num_cams>1)
     {
@@ -99,7 +111,7 @@ ImuCamPose::ImuCamPose(Frame *pF):its(0)
     Rbc[0] = Rcb[0].transpose();
     tbc[0] = pF->mImuCalib.mTbc.translation().cast<double>();
     pCamera[0] = pF->mpCamera;
-    bf = pF->mbf;
+    bf = pF->mbf * ExtrinsicDrift::BaselineScale();
 
     if(num_cams>1)
     {
@@ -138,7 +150,7 @@ ImuCamPose::ImuCamPose(Eigen::Matrix3d &_Rwc, Eigen::Vector3d &_twc, KeyFrame* p
     Rcw[0] = _Rwc.transpose();
     tcw[0] = -Rcw[0] * _twc;
     pCamera[0] = pKF->mpCamera;
-    bf = pKF->mbf;
+    bf = pKF->mbf * ExtrinsicDrift::BaselineScale();
 
     // For posegraph 4DoF
     Rwb0 = Rwb;
@@ -891,6 +903,398 @@ void EdgeTagCornerInertial::linearizeOplus()
                -z,  0.0,  x, 0.0, 1.0, 0.0,
                 y, -x,  0.0, 0.0, 0.0, 1.0;
     _jacobianOplusXj = proj_jac * Rcb * SE3deriv;
+}
+
+bool ExtrinsicDrift::enabled_ = false;
+bool ExtrinsicDrift::factory_set_ = false;
+Sophus::SE3d ExtrinsicDrift::Tbc_factory_;
+Sophus::SE3d ExtrinsicDrift::Tlr_factory_;
+Sophus::SE3d ExtrinsicDrift::Tbc_;
+Sophus::SE3d ExtrinsicDrift::Tlr_;
+double ExtrinsicDrift::sigma_rot_bc_ = 0.5 * M_PI / 180.0;
+double ExtrinsicDrift::sigma_trans_bc_ = 0.005;
+double ExtrinsicDrift::sigma_rot_lr_ = 0.3 * M_PI / 180.0;
+double ExtrinsicDrift::sigma_trans_lr_ = 0.002;
+double ExtrinsicDrift::baseline_scale_ = 1.0;
+int ExtrinsicDrift::n_solves_ = 0;
+
+namespace {
+
+class VertexExtrinsicDrift : public g2o::BaseVertex<12, Eigen::Matrix<double, 12, 1>>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    VertexExtrinsicDrift() { setToOriginImpl(); }
+    bool read(std::istream&) override { return false; }
+    bool write(std::ostream&) const override { return false; }
+    void setToOriginImpl() override { _estimate.setZero(); }
+    void oplusImpl(const double* update) override
+    {
+        for(int i = 0; i < 12; ++i)
+            _estimate[i] += update[i];
+    }
+};
+
+Eigen::Matrix<double, 6, 1> ComposeLog(const Sophus::SE3d& T_factory,
+                                       const Sophus::SE3d& T_current,
+                                       const Eigen::Matrix<double, 6, 1>& inc)
+{
+    const Sophus::SE3d T = T_factory.inverse() * (T_current * Sophus::SE3d::exp(inc));
+    return T.log();
+}
+
+class EdgeExtrinsicPrior : public g2o::BaseUnaryEdge<12, Eigen::Matrix<double, 12, 1>, VertexExtrinsicDrift>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EdgeExtrinsicPrior(const Sophus::SE3d& Tbc_factory, const Sophus::SE3d& Tbc,
+                       const Sophus::SE3d& Tlr_factory, const Sophus::SE3d& Tlr)
+        : Tbc_factory_(Tbc_factory), Tbc_(Tbc), Tlr_factory_(Tlr_factory), Tlr_(Tlr) {}
+
+    void computeError() override
+    {
+        const auto inc = static_cast<const VertexExtrinsicDrift*>(_vertices[0])->estimate();
+        _error.head<6>() = ComposeLog(Tbc_factory_, Tbc_, inc.head<6>());
+        _error.tail<6>() = ComposeLog(Tlr_factory_, Tlr_, inc.segment<6>(6));
+    }
+    bool read(std::istream&) override { return false; }
+    bool write(std::ostream&) const override { return false; }
+
+    Sophus::SE3d Tbc_factory_, Tbc_, Tlr_factory_, Tlr_;
+};
+
+class EdgeDriftMono : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, VertexExtrinsicDrift>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EdgeDriftMono(const Eigen::Vector3d& Xw, const Sophus::SE3d& Twb, GeometricCamera* cam,
+                  bool right, const Sophus::SE3d& Tbc, const Sophus::SE3d& Tlr)
+        : Xw_(Xw), Twb_(Twb), cam_(cam), right_(right), Tbc_(Tbc), Tlr_(Tlr) {}
+
+    void computeError() override
+    {
+        const auto inc = static_cast<const VertexExtrinsicDrift*>(_vertices[0])->estimate();
+        const Sophus::SE3d Tbc = Tbc_ * Sophus::SE3d::exp(inc.head<6>());
+        const Sophus::SE3d Tlr = Tlr_ * Sophus::SE3d::exp(inc.segment<6>(6));
+        Sophus::SE3d Tcw = Tbc.inverse() * Twb_.inverse();
+        if(right_)
+            Tcw = Tlr.inverse() * Tcw;
+        const Eigen::Vector3d Xc = Tcw.rotationMatrix() * Xw_ + Tcw.translation();
+        if(Xc.z() <= 1e-6)
+        {
+            _error.setConstant(1e3);
+            return;
+        }
+        _error = _measurement - cam_->project(Xc);
+    }
+    bool read(std::istream&) override { return false; }
+    bool write(std::ostream&) const override { return false; }
+
+    Eigen::Vector3d Xw_;
+    Sophus::SE3d Twb_;
+    GeometricCamera* cam_;
+    bool right_;
+    Sophus::SE3d Tbc_, Tlr_;
+};
+
+class EdgeDriftStereo : public g2o::BaseUnaryEdge<3, Eigen::Vector3d, VertexExtrinsicDrift>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EdgeDriftStereo(const Eigen::Vector3d& Xw, const Sophus::SE3d& Twb, GeometricCamera* cam,
+                    double fx, const Sophus::SE3d& Tbc, const Sophus::SE3d& Tlr)
+        : Xw_(Xw), Twb_(Twb), cam_(cam), fx_(fx), Tbc_(Tbc), Tlr_(Tlr) {}
+
+    void computeError() override
+    {
+        const auto inc = static_cast<const VertexExtrinsicDrift*>(_vertices[0])->estimate();
+        const Sophus::SE3d Tbc = Tbc_ * Sophus::SE3d::exp(inc.head<6>());
+        const Sophus::SE3d Tlr = Tlr_ * Sophus::SE3d::exp(inc.segment<6>(6));
+        const Sophus::SE3d Tcw = Tbc.inverse() * Twb_.inverse();
+        const Eigen::Vector3d Xc = Tcw.rotationMatrix() * Xw_ + Tcw.translation();
+        if(Xc.z() <= 1e-6)
+        {
+            _error.setConstant(1e3);
+            return;
+        }
+        const Eigen::Vector2d uv = cam_->project(Xc);
+        const double bf = fx_ * std::max(1e-6, Tlr.translation().norm());
+        _error[0] = _measurement[0] - uv[0];
+        _error[1] = _measurement[1] - uv[1];
+        _error[2] = _measurement[2] - (uv[0] - bf / Xc.z());
+    }
+    bool read(std::istream&) override { return false; }
+    bool write(std::ostream&) const override { return false; }
+
+    Eigen::Vector3d Xw_;
+    Sophus::SE3d Twb_;
+    GeometricCamera* cam_;
+    double fx_;
+    Sophus::SE3d Tbc_, Tlr_;
+};
+
+double ReadSigma(cv::FileStorage& fs, const char* key, double fallback)
+{
+    cv::FileNode node = fs[key];
+    if(node.empty())
+        return fallback;
+    const double v = static_cast<double>(node);
+    if(!(v > 0.0) || !std::isfinite(v))
+    {
+        std::cerr << "ERROR: " << key << " must be finite and > 0, got " << v << std::endl;
+        exit(1);
+    }
+    return v;
+}
+
+}  // namespace
+
+void ExtrinsicDrift::LoadSettings(const std::string& settingsPath)
+{
+    cv::FileStorage fs(settingsPath, cv::FileStorage::READ);
+    if(!fs.isOpened())
+        return;
+    cv::FileNode node = fs["Extrinsic.drift_enable"];
+    if(node.empty())
+    {
+        enabled_ = false;
+        std::cout << "Extrinsic.drift_enable: 0" << std::endl;
+        return;
+    }
+    const int v = static_cast<int>(node);
+    if(v != 0 && v != 1)
+    {
+        std::cerr << "ERROR: Extrinsic.drift_enable must be 0 or 1, got " << v << std::endl;
+        exit(1);
+    }
+    enabled_ = v == 1;
+    sigma_rot_bc_ = ReadSigma(fs, "Extrinsic.imu_cam_rot_sigma_deg", 0.5) * M_PI / 180.0;
+    sigma_trans_bc_ = ReadSigma(fs, "Extrinsic.imu_cam_trans_sigma_m", 0.005);
+    sigma_rot_lr_ = ReadSigma(fs, "Extrinsic.stereo_rot_sigma_deg", 0.3) * M_PI / 180.0;
+    sigma_trans_lr_ = ReadSigma(fs, "Extrinsic.stereo_trans_sigma_m", 0.002);
+    std::cout << "Extrinsic.drift_enable: " << (enabled_ ? 1 : 0)
+              << " imu_cam_sigma_deg/m: " << (sigma_rot_bc_ * 180.0 / M_PI) << " / " << sigma_trans_bc_
+              << " stereo_sigma_deg/m: " << (sigma_rot_lr_ * 180.0 / M_PI) << " / " << sigma_trans_lr_
+              << std::endl;
+}
+
+bool ExtrinsicDrift::Enabled()
+{
+    return enabled_;
+}
+
+double ExtrinsicDrift::BaselineScale()
+{
+    return enabled_ ? baseline_scale_ : 1.0;
+}
+
+void ExtrinsicDrift::ApplyToTracker(IMU::Calib* calib, Sophus::SE3f& Tlr)
+{
+    if(!enabled_ || !factory_set_ || !calib)
+        return;
+    calib->mTbc = Tbc_.cast<float>();
+    calib->mTcb = Tbc_.inverse().cast<float>();
+    calib->mbIsSet = true;
+    Tlr = Tlr_.cast<float>();
+}
+
+void ExtrinsicDrift::Optimize(const std::vector<KeyFrame*>& keyframes)
+{
+    if(!enabled_)
+        return;
+    KeyFrame* seed = nullptr;
+    for(KeyFrame* kf : keyframes)
+    {
+        if(kf && !kf->isBad() && kf->mImuCalib.mbIsSet)
+        {
+            seed = kf;
+            break;
+        }
+    }
+    if(!seed)
+        return;
+    if(!factory_set_)
+    {
+        Tbc_factory_ = seed->mImuCalib.mTbc.cast<double>();
+        Tlr_factory_ = seed->GetRelativePoseTlr().cast<double>();
+        Tbc_ = Tbc_factory_;
+        Tlr_ = Tlr_factory_;
+        baseline_scale_ = 1.0;
+        if(Tlr_factory_.translation().norm() < 1e-8)
+            return;
+        factory_set_ = true;
+    }
+
+    struct Item
+    {
+        Eigen::Vector3d Xw;
+        Sophus::SE3d Twb;
+        Eigen::Vector3d obs;
+        int kind = 0;
+        GeometricCamera* cam = nullptr;
+        double info = 1.0;
+        double fx = 0.0;
+    };
+    std::vector<Item> items;
+    items.reserve(4096);
+    for(KeyFrame* kf : keyframes)
+    {
+        if(!kf || kf->isBad() || !kf->mImuCalib.mbIsSet)
+            continue;
+        const Sophus::SE3d Twb = kf->GetImuPose().cast<double>();
+        const std::vector<MapPoint*> points = kf->GetMapPointMatches();
+        for(size_t i = 0; i < points.size(); ++i)
+        {
+            MapPoint* mp = points[i];
+            if(!mp || mp->isBad())
+                continue;
+            Item item;
+            item.Xw = mp->GetWorldPos().cast<double>();
+            item.Twb = Twb;
+            item.fx = kf->fx;
+            if(i < kf->mvKeysUn.size() && kf->mvuRight[i] < 0)
+            {
+                item.kind = 0;
+                item.cam = kf->mpCamera;
+                item.obs << kf->mvKeysUn[i].pt.x, kf->mvKeysUn[i].pt.y, 0.0;
+                item.info = kf->mvInvLevelSigma2[kf->mvKeysUn[i].octave];
+                items.push_back(item);
+            }
+            else if(i < kf->mvKeysUn.size() && kf->mvuRight[i] >= 0)
+            {
+                item.kind = 2;
+                item.cam = kf->mpCamera;
+                item.obs << kf->mvKeysUn[i].pt.x, kf->mvKeysUn[i].pt.y, kf->mvuRight[i];
+                item.info = kf->mvInvLevelSigma2[kf->mvKeysUn[i].octave];
+                items.push_back(item);
+            }
+            if(kf->NLeft != -1 && i >= static_cast<size_t>(kf->NLeft) &&
+               i < static_cast<size_t>(kf->NLeft) + kf->mvKeysRight.size())
+            {
+                const size_t ir = i - static_cast<size_t>(kf->NLeft);
+                Item right = item;
+                right.kind = 1;
+                right.cam = kf->mpCamera2;
+                right.obs << kf->mvKeysRight[ir].pt.x, kf->mvKeysRight[ir].pt.y, 0.0;
+                right.info = kf->mvInvLevelSigma2[kf->mvKeysRight[ir].octave];
+                items.push_back(right);
+            }
+        }
+    }
+    if(items.size() < 30)
+        return;
+    if(items.size() > 2000)
+    {
+        const size_t stride = items.size() / 2000;
+        std::vector<Item> kept;
+        kept.reserve(2000);
+        for(size_t i = 0; i < items.size(); i += stride)
+            kept.push_back(items[i]);
+        items.swap(kept);
+    }
+
+    g2o::SparseOptimizer optimizer;
+    g2o::BlockSolverX::LinearSolverType* linearSolver =
+        new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
+    g2o::BlockSolverX* solverPtr = new g2o::BlockSolverX(linearSolver);
+    optimizer.setAlgorithm(new g2o::OptimizationAlgorithmLevenberg(solverPtr));
+
+    VertexExtrinsicDrift* vertex = new VertexExtrinsicDrift();
+    vertex->setId(0);
+    optimizer.addVertex(vertex);
+
+    Eigen::Matrix<double, 12, 12> priorInfo = Eigen::Matrix<double, 12, 12>::Zero();
+    const double irot_bc = 1.0 / (sigma_rot_bc_ * sigma_rot_bc_);
+    const double itrans_bc = 1.0 / (sigma_trans_bc_ * sigma_trans_bc_);
+    const double irot_lr = 1.0 / (sigma_rot_lr_ * sigma_rot_lr_);
+    const double itrans_lr = 1.0 / (sigma_trans_lr_ * sigma_trans_lr_);
+    for(int i = 0; i < 3; ++i)
+    {
+        priorInfo(i, i) = itrans_bc;
+        priorInfo(3 + i, 3 + i) = irot_bc;
+        priorInfo(6 + i, 6 + i) = itrans_lr;
+        priorInfo(9 + i, 9 + i) = irot_lr;
+    }
+    EdgeExtrinsicPrior* prior = new EdgeExtrinsicPrior(Tbc_factory_, Tbc_, Tlr_factory_, Tlr_);
+    prior->setVertex(0, vertex);
+    prior->setInformation(priorInfo);
+    optimizer.addEdge(prior);
+
+    const double thMono = std::sqrt(5.991);
+    const double thStereo = std::sqrt(7.815);
+    for(const Item& item : items)
+    {
+        if(item.kind == 2)
+        {
+            EdgeDriftStereo* edge = new EdgeDriftStereo(item.Xw, item.Twb, item.cam, item.fx, Tbc_, Tlr_);
+            edge->setVertex(0, vertex);
+            edge->setMeasurement(item.obs);
+            edge->setInformation(Eigen::Matrix3d::Identity() * item.info);
+            g2o::RobustKernelHuber* kernel = new g2o::RobustKernelHuber;
+            kernel->setDelta(thStereo);
+            edge->setRobustKernel(kernel);
+            optimizer.addEdge(edge);
+        }
+        else
+        {
+            EdgeDriftMono* edge = new EdgeDriftMono(item.Xw, item.Twb, item.cam, item.kind == 1, Tbc_, Tlr_);
+            edge->setVertex(0, vertex);
+            edge->setMeasurement(item.obs.head<2>());
+            edge->setInformation(Eigen::Matrix2d::Identity() * item.info);
+            g2o::RobustKernelHuber* kernel = new g2o::RobustKernelHuber;
+            kernel->setDelta(thMono);
+            edge->setRobustKernel(kernel);
+            optimizer.addEdge(edge);
+        }
+    }
+
+    optimizer.initializeOptimization();
+    optimizer.optimize(8);
+    const Eigen::Matrix<double, 12, 1> inc = vertex->estimate();
+    if(!inc.allFinite())
+        return;
+
+    Tbc_ = Tbc_ * Sophus::SE3d::exp(inc.head<6>());
+    Tlr_ = Tlr_ * Sophus::SE3d::exp(inc.segment<6>(6));
+    const double base = Tlr_factory_.translation().norm();
+    baseline_scale_ = base > 1e-8 ? Tlr_.translation().norm() / base : 1.0;
+
+    Map* map = seed->GetMap();
+    if(map)
+    {
+        const Sophus::SE3f Tbc = Tbc_.cast<float>();
+        const Sophus::SE3f Tlr = Tlr_.cast<float>();
+        for(KeyFrame* kf : map->GetAllKeyFrames())
+        {
+            if(!kf || !kf->mImuCalib.mbIsSet)
+                continue;
+            kf->SetRelativePoseTlr(Tlr);
+            kf->ApplyBodyCameraExtrinsic(Tbc);
+        }
+    }
+
+    ++n_solves_;
+    const Eigen::Matrix<double, 6, 1> ebc = (Tbc_factory_.inverse() * Tbc_).log();
+    const Eigen::Matrix<double, 6, 1> elr = (Tlr_factory_.inverse() * Tlr_).log();
+    std::ofstream file("extrinsic_Tbc.txt");
+    if(file)
+    {
+        const Eigen::Matrix4d M = Tbc_.matrix();
+        for(int r = 0; r < 4; ++r)
+            for(int c = 0; c < 4; ++c)
+                file << M(r, c) << (r == 3 && c == 3 ? "" : " ");
+        file << "\n";
+    }
+    if(n_solves_ <= 3 || n_solves_ % 50 == 0)
+    {
+        std::cout << "[ExtrinsicDrift] solves=" << n_solves_
+                  << " imu_cam_dt_mm=" << ebc.head<3>().norm() * 1000.0
+                  << " imu_cam_dR_deg=" << ebc.tail<3>().norm() * 180.0 / M_PI
+                  << " stereo_dt_mm=" << elr.head<3>().norm() * 1000.0
+                  << " stereo_dR_deg=" << elr.tail<3>().norm() * 180.0 / M_PI
+                  << " baseline_scale=" << baseline_scale_
+                  << std::endl;
+    }
 }
 
 }

@@ -1172,6 +1172,9 @@ void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const l
             obs->is_optimization_outlier = obsInliers[obs] < tagParams.min_inlier_corners;
     }
 
+    if(ExtrinsicDrift::Enabled() && nLoopId==0)
+        ExtrinsicDrift::Optimize(vpKFs);
+
     pMap->IncreaseChangeIndex();
 }
 
@@ -4365,6 +4368,9 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int&
         for(xreal_tag::TagObservation *obs : sTouchedObs)
             obs->is_optimization_outlier = obsInliers[obs] < tagParams.min_inlier_corners;
     }
+
+    if(ExtrinsicDrift::Enabled())
+        ExtrinsicDrift::Optimize(vpOptimizableKFs);
 
     pMap->IncreaseChangeIndex();
 }

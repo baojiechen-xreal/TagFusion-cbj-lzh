@@ -328,6 +328,40 @@ int main(int argc, char **argv)
             vstrImageRight.resize(static_cast<size_t>(maxFrames));
             vTimestampsCam.resize(static_cast<size_t>(maxFrames));
         }
+        int frameStride = 1;
+        if(fsSettings.isOpened())
+        {
+            const cv::FileNode n = fsSettings["System.frame_stride"];
+            if(!n.empty())
+                frameStride = static_cast<int>(n);
+        }
+        if(frameStride < 1)
+        {
+            cerr << "ERROR: System.frame_stride must be an integer >= 1, got "
+                 << frameStride << endl;
+            return 1;
+        }
+        if(frameStride > 1)
+        {
+            const size_t nSrc = vstrImageLeft.size();
+            vector<string> leftKept, rightKept;
+            vector<double> timesKept;
+            leftKept.reserve((nSrc + static_cast<size_t>(frameStride) - 1) /
+                             static_cast<size_t>(frameStride));
+            for(size_t i = 0; i < nSrc; i += static_cast<size_t>(frameStride))
+            {
+                leftKept.push_back(vstrImageLeft[i]);
+                rightKept.push_back(vstrImageRight[i]);
+                timesKept.push_back(vTimestampsCam[i]);
+            }
+            vstrImageLeft.swap(leftKept);
+            vstrImageRight.swap(rightKept);
+            vTimestampsCam.swap(timesKept);
+            cout << "System.frame_stride=" << frameStride
+                 << "  (kept " << vstrImageLeft.size() << " / " << nSrc
+                 << " pairs; IMU between kept frames is still integrated)"
+                 << endl;
+        }
     }
 
     if(vstrImageLeft.empty() || vstrImageLeft.size() != vstrImageRight.size())

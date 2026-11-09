@@ -366,18 +366,19 @@ void MapPoint::ComputeDistinctiveDescriptors()
     if(vDescriptors.empty())
         return;
 
-    // Compute distances between them
+    // Compute distances between them. The matrix used to be a stack VLA;
+    // a map point seen by dense keyframes overflowed the stack (SIGSEGV).
     const size_t N = vDescriptors.size();
 
-    float Distances[N][N];
+    vector<float> Distances(N * N, 0.f);
     for(size_t i=0;i<N;i++)
     {
-        Distances[i][i]=0;
+        Distances[i * N + i]=0;
         for(size_t j=i+1;j<N;j++)
         {
             int distij = ORBmatcher::DescriptorDistance(vDescriptors[i],vDescriptors[j]);
-            Distances[i][j]=distij;
-            Distances[j][i]=distij;
+            Distances[i * N + j]=distij;
+            Distances[j * N + i]=distij;
         }
     }
 
@@ -386,7 +387,8 @@ void MapPoint::ComputeDistinctiveDescriptors()
     int BestIdx = 0;
     for(size_t i=0;i<N;i++)
     {
-        vector<int> vDists(Distances[i],Distances[i]+N);
+        vector<int> vDists(Distances.begin() + static_cast<long>(i * N),
+                           Distances.begin() + static_cast<long>((i + 1) * N));
         sort(vDists.begin(),vDists.end());
         int median = vDists[0.5*(N-1)];
 
