@@ -122,6 +122,29 @@ Path(dst).write_text("\n".join(out) + "\n")
 PY
 }
 
+write_kf_stats() {
+  local kf="$1"
+  local dst="$2"
+  python3 - "${kf}" "${dst}" <<'PY'
+import sys
+from pathlib import Path
+src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+ts = []
+for line in src.read_text(errors="ignore").splitlines():
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    ts.append(float(line.split()[0]))
+n = len(ts)
+diffs = [ts[i] - ts[i - 1] for i in range(1, n) if ts[i] > ts[i - 1]]
+diffs.sort()
+median = diffs[len(diffs) // 2] if diffs else float("nan")
+text = f"keyframes\t{n}\nmedian_interval_s\t{median:.6f}\n"
+dst.write_text(text)
+print(f"[KFStats] keyframes={n} median_interval_s={median:.6f}")
+PY
+}
+
 strip_tum() {
   local src="$1"
   local dst="$2"
@@ -157,13 +180,18 @@ import numpy as np
 import re
 
 src, dst, settings = sys.argv[1:]
-text = Path(settings).read_text(errors="ignore")
-m = re.search(r"IMU\.T_b_c1:.*?data:\s*\[([^\]]+)\]", text, re.S)
-if not m:
-    raise SystemExit(f"IMU.T_b_c1 not found in {settings}")
-vals = [float(x) for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
+drift_path = Path(src).parent / "extrinsic_Tbc.txt"
+vals = []
+if drift_path.is_file():
+    vals = [float(x) for x in drift_path.read_text().split() if x.strip()]
 if len(vals) != 16:
-    raise SystemExit(f"IMU.T_b_c1 has {len(vals)} values in {settings}")
+    text = Path(settings).read_text(errors="ignore")
+    m = re.search(r"IMU\.T_b_c1:.*?data:\s*\[([^\]]+)\]", text, re.S)
+    if not m:
+        raise SystemExit(f"IMU.T_b_c1 not found in {settings}")
+    vals = [float(x) for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
+if len(vals) != 16:
+    raise SystemExit(f"IMU.T_b_c1 has {len(vals)} values")
 Tbc = np.array(vals, dtype=float).reshape(4, 4)
 Tcb = np.linalg.inv(Tbc)
 
@@ -324,6 +352,10 @@ run_sequence() {
       :
     elif [[ -f "${GLASS}/FrameTimeStats.csv" ]]; then
       mv -f "${GLASS}/FrameTimeStats.csv" "${out_dir}/"
+    fi
+    local kf_stats_src="${out_dir}/kf_${traj_name}.txt"
+    if [[ -f "${kf_stats_src}" ]]; then
+      write_kf_stats "${kf_stats_src}" "${out_dir}/kf_stats.txt"
     fi
     if [[ "${run_status}" -ne 0 ]]; then
       echo "FAIL track ${date}/${scene}/${seq_name} (exit ${run_status}), see ${out_dir}/run.log"

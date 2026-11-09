@@ -556,6 +556,9 @@ public:
 
     Sophus::SE3f GetRelativePoseTrl();
     Sophus::SE3f GetRelativePoseTlr();
+    void SetRelativePoseTlr(const Sophus::SE3f &Tlr);
+    // Keep the body pose, rewrite the left-camera pose with a new T_b_c.
+    void ApplyBodyCameraExtrinsic(const Sophus::SE3f &Tbc);
 
     //KeyPoints in the right image (for stereo fisheye, coordinates are needed)
     const std::vector<cv::KeyPoint> mvKeysRight;

@@ -19,6 +19,8 @@
 
 #include "Tracking.h"
 
+#include <cmath>
+
 #include "ORBmatcher.h"
 #include "FrameDrawer.h"
 #include "Converter.h"
@@ -63,6 +65,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
     mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL)),
+    mKfInertialMaxInterval(0.5f),
+    mKfRefMatchRatio(0.f), mKfMaxTranslation(0.f), mKfMaxRotationRad(0.f), mKfMaxAngVelRad(0.f),
     april_tag_detector_(nullptr), tag_initializer_(nullptr), tag_tracker_(nullptr),
     tag_viewer_(nullptr)
 {
@@ -110,6 +114,74 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 
             }
         }
+    }
+
+    {
+        cv::FileStorage fsKf(strSettingPath, cv::FileStorage::READ);
+        if(fsKf.isOpened())
+        {
+            cv::FileNode node = fsKf["KeyFrame.inertial_max_interval_s"];
+            if(!node.empty())
+            {
+                const float v = node;
+                if(!(v > 0.f) || !std::isfinite(v))
+                {
+                    std::cerr << "ERROR: KeyFrame.inertial_max_interval_s must be a finite number > 0, got " << v << std::endl;
+                    exit(1);
+                }
+                mKfInertialMaxInterval = v;
+            }
+            node = fsKf["KeyFrame.ref_match_ratio"];
+            if(!node.empty())
+            {
+                const float v = node;
+                if(!(v > 0.f) || v > 1.f || !std::isfinite(v))
+                {
+                    std::cerr << "ERROR: KeyFrame.ref_match_ratio must be in (0,1], got " << v << std::endl;
+                    exit(1);
+                }
+                mKfRefMatchRatio = v;
+            }
+            node = fsKf["KeyFrame.max_translation_m"];
+            if(!node.empty())
+            {
+                const float v = node;
+                if(!(v > 0.f) || !std::isfinite(v))
+                {
+                    std::cerr << "ERROR: KeyFrame.max_translation_m must be a finite number > 0, got " << v << std::endl;
+                    exit(1);
+                }
+                mKfMaxTranslation = v;
+            }
+            node = fsKf["KeyFrame.max_rotation_deg"];
+            if(!node.empty())
+            {
+                const float v = node;
+                if(!(v > 0.f) || !std::isfinite(v))
+                {
+                    std::cerr << "ERROR: KeyFrame.max_rotation_deg must be a finite number > 0, got " << v << std::endl;
+                    exit(1);
+                }
+                mKfMaxRotationRad = v * static_cast<float>(M_PI) / 180.f;
+            }
+            node = fsKf["KeyFrame.max_insert_ang_vel_rad_s"];
+            if(!node.empty())
+            {
+                const float v = node;
+                if(!(v > 0.f) || !std::isfinite(v))
+                {
+                    std::cerr << "ERROR: KeyFrame.max_insert_ang_vel_rad_s must be a finite number > 0, got " << v << std::endl;
+                    exit(1);
+                }
+                mKfMaxAngVelRad = v;
+            }
+        }
+        std::cout << "KeyFrame.inertial_max_interval_s: " << mKfInertialMaxInterval
+                  << " ref_match_ratio: " << (mKfRefMatchRatio > 0.f ? mKfRefMatchRatio : 0.75f)
+                  << " max_translation_m: " << mKfMaxTranslation
+                  << " max_rotation_deg: " << (mKfMaxRotationRad * 180.f / static_cast<float>(M_PI))
+                  << " max_insert_ang_vel_rad_s: " << mKfMaxAngVelRad
+                  << std::endl;
     }
 
     tag_enabled_ = xreal_tag::ModuleEnabledFromSettings(strSettingPath);
@@ -1685,6 +1757,8 @@ bool Tracking::GetStepByStep()
 Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp, string filename)
 {
     //cout << "GrabImageStereo" << endl;
+    if(mpImuCalib)
+        ExtrinsicDrift::ApplyToTracker(mpImuCalib, mTlr);
     mLastTagDetectMs = 0.0;
     mLastTagIppeMs = 0.0;
 
@@ -3544,6 +3618,18 @@ bool Tracking::TrackLocalMap()
 
 bool Tracking::NeedNewKeyFrame()
 {
+    // Fast rotation blurs the image. Skip every insertion reason, including the time cap.
+    if(mKfMaxAngVelRad > 0.f && !mvImuFromLastFrame.empty())
+    {
+        const Eigen::Vector3f bias(mCurrentFrame.mImuBias.bwx, mCurrentFrame.mImuBias.bwy, mCurrentFrame.mImuBias.bwz);
+        Eigen::Vector3f sum = Eigen::Vector3f::Zero();
+        for(const IMU::Point &imu : mvImuFromLastFrame)
+            sum += imu.w - bias;
+        const float angVel = (sum / static_cast<float>(mvImuFromLastFrame.size())).norm();
+        if(angVel >= mKfMaxAngVelRad)
+            return false;
+    }
+
     if((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && !mpAtlas->GetCurrentMap()->isImuInitialized())
     {
         if (mSensor == System::IMU_MONOCULAR && (mCurrentFrame.mTimeStamp-mpLastKeyFrame->mTimeStamp)>=0.25)
@@ -3612,6 +3698,9 @@ bool Tracking::NeedNewKeyFrame()
         thRefRatio = 0.9f;
 
     if(mpCamera2) thRefRatio = 0.75f;
+    if(nKFs >= 2 && mKfRefMatchRatio > 0.f &&
+       (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))
+        thRefRatio = mKfRefMatchRatio;
 
     if(mSensor==System::IMU_MONOCULAR)
     {
@@ -3642,9 +3731,22 @@ bool Tracking::NeedNewKeyFrame()
         }
         else if (mSensor==System::IMU_STEREO || mSensor == System::IMU_RGBD)
         {
-            if ((mCurrentFrame.mTimeStamp-mpLastKeyFrame->mTimeStamp)>=0.5)
+            if ((mCurrentFrame.mTimeStamp-mpLastKeyFrame->mTimeStamp)>=mKfInertialMaxInterval)
                 c3 = true;
         }
+    }
+
+    bool cRT = false;
+    if(mpLastKeyFrame && mCurrentFrame.isSet() &&
+       (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) &&
+       (mKfMaxTranslation > 0.f || mKfMaxRotationRad > 0.f))
+    {
+        const Sophus::SE3f Trel = mCurrentFrame.GetPose() * mpLastKeyFrame->GetPoseInverse();
+        const float trans = Trel.translation().norm();
+        const float rot = Trel.so3().log().norm();
+        if((mKfMaxTranslation > 0.f && trans >= mKfMaxTranslation) ||
+           (mKfMaxRotationRad > 0.f && rot >= mKfMaxRotationRad))
+            cRT = true;
     }
 
     bool c4 = false;
@@ -3687,7 +3789,7 @@ bool Tracking::NeedNewKeyFrame()
         }
     }
 
-    if(((c1a||c1b||c1c) && c2)||c3 ||c4 || cTagNew)
+    if(((c1a||c1b||c1c) && c2)||c3 || cRT ||c4 || cTagNew)
     {
         return true;
     }

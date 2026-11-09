@@ -369,6 +369,15 @@ protected:
     //New KeyFrame rules (according to fps)
     int mMinFrames;
     int mMaxFrames;
+    // IMU_STEREO / IMU_RGBD after IMU init: force a keyframe when this much time has passed.
+    float mKfInertialMaxInterval;
+    // 0 keeps the historical 0.75 reference-match ratio.
+    float mKfRefMatchRatio;
+    // 0 disables the motion gate. Either threshold can fire a keyframe.
+    float mKfMaxTranslation;
+    float mKfMaxRotationRad;
+    // 0 disables the blur gate. Above this bias-corrected gyro rate, do not insert.
+    float mKfMaxAngVelRad;
 
     int mnFirstImuFrameId;
     int mnFramesToResetIMU;
