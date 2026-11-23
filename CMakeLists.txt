@@ -55,8 +55,7 @@ find_package(realsense2)
 
 include_directories(
 ${PROJECT_SOURCE_DIR}
-${PROJECT_SOURCE_DIR}/include
-${PROJECT_SOURCE_DIR}/include/CameraModels
+${PROJECT_SOURCE_DIR}/src
 ${PROJECT_SOURCE_DIR}/Thirdparty/Sophus
 ${EIGEN3_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
@@ -65,77 +64,99 @@ ${Pangolin_INCLUDE_DIRS}
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
 add_library(${PROJECT_NAME} SHARED
-src/System.cc
-src/Tracking.cc
-src/LocalMapping.cc
-src/LoopClosing.cc
-src/ORBextractor.cc
-src/ORBmatcher.cc
-src/FrameDrawer.cc
-src/Converter.cc
-src/MapPoint.cc
-src/KeyFrame.cc
-src/Atlas.cc
-src/Map.cc
-src/MapDrawer.cc
-src/Optimizer.cc
-src/Frame.cc
-src/KeyFrameDatabase.cc
-src/Sim3Solver.cc
-src/Viewer.cc
-src/ImuTypes.cc
-src/G2oTypes.cc
-src/CameraModels/Pinhole.cpp
-src/CameraModels/KannalaBrandt8.cpp
-src/OptimizableTypes.cpp
-src/MLPnPsolver.cpp
-src/GeometricTools.cc
-src/TwoViewReconstruction.cc
-src/Config.cc
-src/Settings.cc
-src/ua_tag/TagFrameData.cc
-src/ua_tag/MapTagData.cc
-src/ua_tag/TagInitializer.cc
-src/ua_tag/TagTracker.cc
-src/ua_tag/TagOptimizer.cc
-src/ua_tag/TagMapExporter.cc
-src/ua_tag/TagPoseConstraints.cc
-include/System.h
-include/Tracking.h
-include/LocalMapping.h
-include/LoopClosing.h
-include/ORBextractor.h
-include/ORBmatcher.h
-include/FrameDrawer.h
-include/Converter.h
-include/MapPoint.h
-include/KeyFrame.h
-include/Atlas.h
-include/Map.h
-include/MapDrawer.h
-include/Optimizer.h
-include/Frame.h
-include/KeyFrameDatabase.h
-include/Sim3Solver.h
-include/Viewer.h
-include/ImuTypes.h
-include/G2oTypes.h
-include/CameraModels/GeometricCamera.h
-include/CameraModels/Pinhole.h
-include/CameraModels/KannalaBrandt8.h
-include/OptimizableTypes.h
-include/MLPnPsolver.h
-include/GeometricTools.h
-include/TwoViewReconstruction.h
-include/SerializationUtils.h
-include/Config.h
-include/Settings.h
-include/ua_tag/TagObservation.h
-include/ua_tag/TagFrameData.h
-include/ua_tag/MapTagData.h
-include/ua_tag/TagOptimizer.h
-include/ua_tag/TagMapExporter.h
-include/ua_tag/TagPoseConstraints.h)
+# core: 基础配置、传感器类型、词袋、几何工具与序列化
+src/core/Config.cc
+src/core/Config.h
+src/core/Settings.cc
+src/core/Settings.h
+src/core/ImuTypes.cc
+src/core/ImuTypes.h
+src/core/Converter.cc
+src/core/Converter.h
+src/core/GeometricTools.cc
+src/core/GeometricTools.h
+src/core/ORBVocabulary.h
+src/core/SerializationUtils.h
+src/core/TagObservation.h
+
+# camera: 相机模型与双视图几何重建
+src/camera/GeometricCamera.h
+src/camera/Pinhole.cpp
+src/camera/Pinhole.h
+src/camera/KannalaBrandt8.cpp
+src/camera/KannalaBrandt8.h
+src/camera/TwoViewReconstruction.cc
+src/camera/TwoViewReconstruction.h
+
+# database: 帧、关键帧、地图点、地图、Atlas、词袋数据库与 Tag 地图数据
+src/database/Frame.cc
+src/database/Frame.h
+src/database/KeyFrame.cc
+src/database/KeyFrame.h
+src/database/MapPoint.cc
+src/database/MapPoint.h
+src/database/Map.cc
+src/database/Map.h
+src/database/Atlas.cc
+src/database/Atlas.h
+src/database/KeyFrameDatabase.cc
+src/database/KeyFrameDatabase.h
+src/database/TagFrameData.cc
+src/database/TagFrameData.h
+src/database/MapTagData.cc
+src/database/MapTagData.h
+
+# features: ORB 特征提取与匹配
+src/features/ORBextractor.cc
+src/features/ORBextractor.h
+src/features/ORBmatcher.cc
+src/features/ORBmatcher.h
+src/features/AprilTagDetector.h
+
+# system: 系统总控、前端跟踪、局部建图与 Tag 初始化/跟踪
+src/system/System.cc
+src/system/System.h
+src/system/Tracking.cc
+src/system/Tracking.h
+src/system/LocalMapping.cc
+src/system/LocalMapping.h
+src/system/TagInitializer.cc
+src/system/TagInitializer.h
+src/system/TagTracker.cc
+src/system/TagTracker.h
+
+# optimization: 非线性优化器、g2o 图元素、MLPnP 与 Tag 约束
+src/optimization/Optimizer.cc
+src/optimization/Optimizer.h
+src/optimization/G2oTypes.cc
+src/optimization/G2oTypes.h
+src/optimization/OptimizableTypes.cpp
+src/optimization/OptimizableTypes.h
+src/optimization/MLPnPsolver.cpp
+src/optimization/MLPnPsolver.h
+src/optimization/TagOptimizer.cc
+src/optimization/TagOptimizer.h
+src/optimization/TagPoseConstraints.cc
+src/optimization/TagPoseConstraints.h
+
+# loop: 回环检测与闭环 Sim3 求解
+src/loop/LoopClosing.cc
+src/loop/LoopClosing.h
+src/loop/Sim3Solver.cc
+src/loop/Sim3Solver.h
+
+# viz: 可视化线程与绘制器
+src/viz/Viewer.cc
+src/viz/Viewer.h
+src/viz/FrameDrawer.cc
+src/viz/FrameDrawer.h
+src/viz/MapDrawer.cc
+src/viz/MapDrawer.h
+
+# io: Tag 地图导出
+src/io/TagMapExporter.cc
+src/io/TagMapExporter.h
+)
 
 add_subdirectory(Thirdparty/g2o)
 
@@ -155,11 +176,13 @@ if(ORB_SLAM3_WITH_APRILTAG)
     list(APPEND ORB_SLAM3_THIRDPARTY_LIBS apriltag)
     target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_APRILTAG)
     target_sources(${PROJECT_NAME} PRIVATE
-        src/ua_tag/AprilTagDetector.cc
-        src/ua_tag/AprilTagVisualizer.cc
-        src/ua_tag/TagPoseLogger.cc
-        src/ua_tag/TagViewer.cc
-        include/ua_tag/TagViewer.h)
+        src/features/AprilTagDetector.cc
+        src/viz/AprilTagVisualizer.cc
+        src/viz/AprilTagVisualizer.h
+        src/io/TagPoseLogger.cc
+        src/io/TagPoseLogger.h
+        src/viz/TagViewer.cc
+        src/viz/TagViewer.h)
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/include
         ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/ethz_apriltag2/include)

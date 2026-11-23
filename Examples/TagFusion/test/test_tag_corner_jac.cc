@@ -1,5 +1,5 @@
-#include "OptimizableTypes.h"
-#include "G2oTypes.h"
+#include "optimization/OptimizableTypes.h"
+#include "optimization/G2oTypes.h"
 
 #include <iostream>
 

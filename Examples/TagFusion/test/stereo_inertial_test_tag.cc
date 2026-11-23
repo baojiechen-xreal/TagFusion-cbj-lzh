@@ -34,8 +34,8 @@
 
 #include <opencv2/core/core.hpp>
 
-#include "ImuTypes.h"
-#include "System.h"
+#include "core/ImuTypes.h"
+#include "system/System.h"
 
 using namespace std;
 
