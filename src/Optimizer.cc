@@ -3421,6 +3421,53 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
     return nIn;
 }
 
+namespace
+{
+int gLocalInertialBAMaxOpt = 10;
+int gLocalInertialBAOptIt = 10;
+int gLocalInertialBALargeMaxOpt = 25;
+int gLocalInertialBALargeOptIt = 4;
+
+bool ReadOptionalPositiveInt(const cv::FileStorage &fs, const char *key, int &out)
+{
+    cv::FileNode node = fs[key];
+    if(node.empty())
+        return true;
+    const double v = static_cast<double>(node);
+    const int iv = static_cast<int>(std::lround(v));
+    if(!std::isfinite(v) || iv < 1 || std::abs(v - static_cast<double>(iv)) > 1e-6)
+    {
+        std::cerr << "ERROR: " << key << " must be an integer >= 1, got " << v << std::endl;
+        return false;
+    }
+    out = iv;
+    return true;
+}
+}  // namespace
+
+void Optimizer::LoadLocalInertialBASettings(const std::string &settingsPath)
+{
+    gLocalInertialBAMaxOpt = 10;
+    gLocalInertialBAOptIt = 10;
+    gLocalInertialBALargeMaxOpt = 25;
+    gLocalInertialBALargeOptIt = 4;
+
+    cv::FileStorage fs(settingsPath, cv::FileStorage::READ);
+    if(!fs.isOpened())
+        return;
+
+    if(!ReadOptionalPositiveInt(fs, "LocalInertialBA.max_opt_kfs", gLocalInertialBAMaxOpt)
+       || !ReadOptionalPositiveInt(fs, "LocalInertialBA.opt_iterations", gLocalInertialBAOptIt)
+       || !ReadOptionalPositiveInt(fs, "LocalInertialBA.large_max_opt_kfs", gLocalInertialBALargeMaxOpt)
+       || !ReadOptionalPositiveInt(fs, "LocalInertialBA.large_opt_iterations", gLocalInertialBALargeOptIt))
+        exit(1);
+
+    std::cout << "LocalInertialBA: max_opt_kfs=" << gLocalInertialBAMaxOpt
+              << " opt_iterations=" << gLocalInertialBAOptIt
+              << " large_max_opt_kfs=" << gLocalInertialBALargeMaxOpt
+              << " large_opt_iterations=" << gLocalInertialBALargeOptIt << std::endl;
+}
+
 void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge, bool bRecInit,
                                const xreal_tag::TagLocalBAParams &tagParams, xreal_tag::TagLocalBAStats *tagStats)
 {
@@ -3429,12 +3476,12 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int&
 
     Map* pCurrentMap = pKF->GetMap();
 
-    int maxOpt=10;
-    int opt_it=10;
+    int maxOpt = gLocalInertialBAMaxOpt;
+    int opt_it = gLocalInertialBAOptIt;
     if(bLarge)
     {
-        maxOpt=25;
-        opt_it=4;
+        maxOpt = gLocalInertialBALargeMaxOpt;
+        opt_it = gLocalInertialBALargeOptIt;
     }
     const int Nd = std::min((int)pCurrentMap->KeyFramesInMap()-2,maxOpt);
     const unsigned long maxKFid = pKF->mnId;

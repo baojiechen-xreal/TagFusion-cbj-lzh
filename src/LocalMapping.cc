@@ -48,6 +48,7 @@ namespace ORB_SLAM3
 LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName):
     mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial),
     mCullRedundantStereoInertial(0.5f), mCullProtectRecentS(0.f), mCullMaxMergedIntervalS(0.f),
+    mCullRelaxedMaxMergedIntervalS(0.f), mCullHighRedundancyRatio(0.f), mCullMinNeighborCovis(0),
     mCullMaxTrans(0.f), mCullMaxRot(0.f), mCullProtectTag(false),
     mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true),
@@ -1508,16 +1509,26 @@ void LocalMapping::LoadKeyFrameCullingPolicy(const std::string &settingsPath)
     cv::FileStorage fs(settingsPath, cv::FileStorage::READ);
     if(!fs.isOpened())
         return;
+    float minNeighborCovisF = 0.f;
     if(!ReadOptionalFloat(fs, "KeyFrame.culling.stereo_inertial_redundancy_ratio", mCullRedundantStereoInertial, false)
        || !ReadOptionalFloat(fs, "KeyFrame.culling.protect_recent_s", mCullProtectRecentS, true)
        || !ReadOptionalFloat(fs, "KeyFrame.culling.max_merged_interval_s", mCullMaxMergedIntervalS, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.relaxed_max_merged_interval_s", mCullRelaxedMaxMergedIntervalS, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.high_redundancy_ratio", mCullHighRedundancyRatio, true)
+       || !ReadOptionalFloat(fs, "KeyFrame.culling.min_neighbor_covis", minNeighborCovisF, true)
        || !ReadOptionalFloat(fs, "KeyFrame.culling.max_translation_m", mCullMaxTrans, true)
        || !ReadOptionalFloat(fs, "KeyFrame.culling.max_rotation_deg", mCullMaxRot, true))
         exit(1);
+    mCullMinNeighborCovis = static_cast<int>(std::lround(minNeighborCovisF));
     mCullMaxRot = mCullMaxRot * static_cast<float>(M_PI) / 180.f;
     if(mCullRedundantStereoInertial > 1.f)
     {
         std::cerr << "ERROR: KeyFrame.culling.stereo_inertial_redundancy_ratio must be in (0,1]" << std::endl;
+        exit(1);
+    }
+    if(mCullHighRedundancyRatio > 1.f)
+    {
+        std::cerr << "ERROR: KeyFrame.culling.high_redundancy_ratio must be in [0,1]" << std::endl;
         exit(1);
     }
     cv::FileNode tagNode = fs["KeyFrame.culling.protect_tag_support"];
@@ -1534,6 +1545,9 @@ void LocalMapping::LoadKeyFrameCullingPolicy(const std::string &settingsPath)
     std::cout << "KeyFrame.culling.stereo_inertial_redundancy_ratio: " << mCullRedundantStereoInertial
               << " protect_recent_s: " << mCullProtectRecentS
               << " max_merged_interval_s: " << mCullMaxMergedIntervalS
+              << " relaxed_max_merged_interval_s: " << mCullRelaxedMaxMergedIntervalS
+              << " high_redundancy_ratio: " << mCullHighRedundancyRatio
+              << " min_neighbor_covis: " << mCullMinNeighborCovis
               << " max_translation_m: " << mCullMaxTrans
               << " max_rotation_deg: " << (mCullMaxRot * 180.f / static_cast<float>(M_PI))
               << " protect_tag_support: " << (mCullProtectTag ? 1 : 0) << std::endl;
@@ -1669,6 +1683,39 @@ void LocalMapping::KeyFrameCulling()
                     const float t = pKF->mNextKF->mTimeStamp-pKF->mPrevKF->mTimeStamp;
                     const bool legacyMerge = (bInitImu && (pKF->mnId<last_ID) && t<3.) || (t<0.5);
                     const bool cappedMerge = mCullMaxMergedIntervalS>0.f && t<mCullMaxMergedIntervalS;
+                    bool relaxedMerge = false;
+                    if(mCullMaxMergedIntervalS>0.f &&
+                       mCullRelaxedMaxMergedIntervalS>mCullMaxMergedIntervalS &&
+                       !cappedMerge &&
+                       bInitImu && (pKF->mnId<last_ID) &&
+                       t<mCullRelaxedMaxMergedIntervalS)
+                    {
+                        const float ratio = (nMPs > 0)
+                            ? (static_cast<float>(nRedundantObservations) / static_cast<float>(nMPs))
+                            : 0.f;
+                        const bool ratioOk = mCullHighRedundancyRatio<=0.f || ratio >= mCullHighRedundancyRatio;
+                        const int covis = pKF->mPrevKF->GetWeight(pKF->mNextKF);
+                        const bool covisOk = mCullMinNeighborCovis<=0 || covis >= mCullMinNeighborCovis;
+                        relaxedMerge = ratioOk && covisOk;
+
+                        static unsigned long sRelaxAttempt = 0, sRelaxPass = 0, sRelaxFailRatio = 0, sRelaxFailCovis = 0;
+                        ++sRelaxAttempt;
+                        if(relaxedMerge) ++sRelaxPass;
+                        else {
+                            if(!ratioOk) ++sRelaxFailRatio;
+                            if(!covisOk) ++sRelaxFailCovis;
+                        }
+                        if(sRelaxAttempt <= 5 || (sRelaxAttempt % 200 == 0))
+                        {
+                            std::cout << "[KFCullAdaptive] attempt=" << sRelaxAttempt
+                                      << " pass=" << sRelaxPass
+                                      << " fail_ratio=" << sRelaxFailRatio
+                                      << " fail_covis=" << sRelaxFailCovis
+                                      << " last_t=" << t
+                                      << " last_ratio=" << ratio
+                                      << " last_covis=" << covis << std::endl;
+                        }
+                    }
                     bool motionMerge = false;
                     if(mCullMaxTrans>0.f || mCullMaxRot>0.f)
                     {
@@ -1681,7 +1728,7 @@ void LocalMapping::KeyFrameCulling()
                     }
                     const bool allowMerge = (mCullMaxTrans>0.f || mCullMaxRot>0.f)
                                                 ? motionMerge
-                                                : (mCullMaxMergedIntervalS>0.f ? cappedMerge : legacyMerge);
+                                                : (mCullMaxMergedIntervalS>0.f ? (cappedMerge || relaxedMerge) : legacyMerge);
 
                     if(allowMerge)
                     {

@@ -1,0 +1,179 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# TUM-VI room stereo-inertial, 512x512, 20 Hz.
+# Intrinsics, Stereo.T_c1_c2, IMU.T_b_c1 and IMU noise are the official
+# Examples/Stereo-Inertial/TUM-VI.yaml numbers (same as this machine's camchain).
+# Keyframe time gates and ORBextractor.nFeatures stay at the 0819 values.
+# Camera.fps / frame_stride / IMU.Frequency follow the room sequences, not the glasses.
+#--------------------------------------------------------------------------------------------
+
+File.version: "1.0"
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters
+#--------------------------------------------------------------------------------------------
+Camera.type: "KannalaBrandt8"
+
+# Left
+Camera1.fx: 190.97847715128717
+Camera1.fy: 190.9733070521226
+Camera1.cx: 254.93170605935475
+Camera1.cy: 256.8974428996504
+
+Camera1.k1: 0.0034823894022493434
+Camera1.k2: 0.0007150348452162257
+Camera1.k3: -0.0020532361418706202
+Camera1.k4: 0.00020293673591811182
+
+# Right
+Camera2.fx: 190.44236969414825
+Camera2.fy: 190.4344384721956
+Camera2.cx: 252.59949716835982
+Camera2.cy: 254.91723064636983
+
+Camera2.k1: 0.0034003170790442797
+Camera2.k2: 0.001766278153469831
+Camera2.k3: -0.00266312569781606
+Camera2.k4: 0.0003299517423931039
+
+# T_c1_c2 is the inverse of Kalibr T_cn_cnm1. Baseline about 0.1011 m.
+Stereo.T_c1_c2: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: f
+  data: [ 0.999999445773493,   0.000791687752817,   0.000694034010224,   0.101063427414194,
+            -0.000823363992158,   0.998899461915674,   0.046895490788700,   0.001946204678584,
+            -0.000656143613644,  -0.046896036240590,   0.998899560146304,   0.001015350132563,
+          0.0,0.0,0.0,1.0]
+
+Camera1.overlappingBegin: 0
+Camera1.overlappingEnd: 511
+
+Camera2.overlappingBegin: 0
+Camera2.overlappingEnd: 511
+
+Camera.width: 512
+Camera.height: 512
+
+# Measured median interval is 0.050002 s. Also used as mMaxFrames.
+Camera.fps: 20
+
+Camera.RGB: 1
+
+Stereo.ThDepth: 40.0
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters
+# T_b_c1 is the inverse of Kalibr T_cam_imu.
+# Noise is the dataset's inflated Allan values (noise x2, random walk x10).
+#--------------------------------------------------------------------------------------------
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [-0.9995250378696743, 0.0075019185074052044, -0.02989013031643309, 0.045574835649698026,
+          0.029615343885863205, -0.03439736061393144, -0.998969345370175, -0.071161801837997044,
+         -0.008522328211654736, -0.9993800792498829, 0.03415885127385616, -0.044681254117144367,
+          0.0, 0.0, 0.0, 1.0]
+
+IMU.NoiseGyro: 0.00016
+IMU.NoiseAcc: 0.0028
+IMU.GyroWalk: 0.000022
+IMU.AccWalk: 0.00086
+IMU.Frequency: 200.0
+IMU.InsertKFsWhenLost: 1
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+# nFeatures is the 0819 yaml value (1200), not the official TUM-VI 1000.
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+# Offline mode does not start Pangolin. Keep the numeric fields so Settings can parse them.
+#--------------------------------------------------------------------------------------------
+Viewer.enable: 0
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -3.5
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0
+
+#--------------------------------------------------------------------------------------------
+# Tag Parameters
+#--------------------------------------------------------------------------------------------
+Tag.enable: 1
+Tag.family: "tag36h11"
+Tag.hamming: 2
+Tag.black_borders: [2]
+Tag.size: 0.088
+Tag.gamma_enable: 1            # 0=no gamma before AprilTag; 1=apply Tag.gamma
+Tag.gamma: 0.5                  # out=255*(in/255)^gamma；<1 brightens dark regions. CLAHE is disabled
+Tag.verbose: 1
+Tag.export: 1
+Tag.export_dir: "tag_export"   # calibration writes the init CSV; Shutdown writes final orb_final_*.csv / *_final_keyframes_tum.txt / final_map.ply
+Tag.viewer: 0                   # ignored in offline mode (TagViewer thread is not started)
+Tag.save_vis: 0
+Tag.save_vis_dir: "tag_vis"
+Tag.show_in_orb_viewer: 0       # 0819 value is 1. No DISPLAY here: cv::imshow aborts, so the offline run keeps this off
+
+# ========================== local BA ==========================
+Tag.pose_optimization: 1   # shared by visual PoseOptimization and inertial PoseInertial* (only the active-sensor branch runs)
+Tag.corner_sigma: 2.0
+Tag.min_inlier_corners: 3
+Tag.fixed_only: 0
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1
+
+# ========================== adaptive corner-factor weights ==========================
+Tag.factor_weight.enable: 1
+Tag.factor_weight.alpha: 3.0          # base Tag / feature weight ratio
+Tag.factor_weight.s_sat: 400.0        # area for full weight, px^2
+Tag.factor_weight.lambda_s: 3.0
+Tag.factor_weight.theta0_deg: 60.0    # view-angle scale
+Tag.factor_weight.lambda_theta: 1.0
+Tag.factor_weight.phi0_deg: 15.0      # significant IPPE two-fold rotation gap
+Tag.factor_weight.e0: 1.0             # two-fold residual separation scale, px
+Tag.factor_weight.lambda_amb: 0.0         # 0=disable the ambiguity term (w_amb stays 1)
+Tag.factor_weight.w_min: 0.001
+Tag.factor_weight.verbose: 1          # 1=print S, theta, delta-phi, delta-e and per-term weights
+
+# ========================== loop closure ==========================
+Tag.loop.enable: 1
+Tag.loop.min_history_observations: 2
+Tag.loop.min_keyframe_gap: 30 # minimum id gap between the historical loop KF and the current KF
+Tag.loop.min_reobservation_gap_kfs: 30 # gap since the last valid observation; too small means continuously visible, not a reobservation
+Tag.loop.min_historical_kf_map_points: 20 # historical KF must have at least this many tracked map points
+Tag.loop.max_ippe_reprojection_error: 5.0 # IPPE reprojection-error threshold
+Tag.loop.max_stereo_translation_error: 0.20 # left/right camera translation-difference threshold
+Tag.loop.max_stereo_rotation_error: 0.20 # left/right camera rotation-difference threshold
+Tag.loop.max_roll_pitch_correction: 0.15 # roll/pitch correction threshold of the Sim3 update
+Tag.loop.max_yaw_correction: 1.57 # yaw correction threshold of the Sim3 update
+Tag.loop.min_consistent_tags: 1 # minimum number of consistent tags required to accept a loop
+Tag.loop.reference_timeout_kfs: 4 # drop the frozen loop reference after this many KFs without seeing the tag
+Tag.loop.verbose: 1
+
+#--------------------------------------------------------------------------------------------
+# 20 Hz, no extra stride. Keyframe gates stay on the 0819 time values.
+#--------------------------------------------------------------------------------------------
+System.frame_stride: 1
+KeyFrame.inertial_max_interval_s: 0.80
+KeyFrame.culling.max_merged_interval_s: 1.60
+KeyFrame.culling.stereo_inertial_redundancy_ratio: 0.60
+KeyFrame.culling.protect_recent_s: 1.0
+KeyFrame.culling.protect_tag_support: 0

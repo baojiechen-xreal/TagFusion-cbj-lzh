@@ -171,6 +171,9 @@ protected:
     float mCullRedundantStereoInertial;
     float mCullProtectRecentS;
     float mCullMaxMergedIntervalS;
+    float mCullRelaxedMaxMergedIntervalS;
+    float mCullHighRedundancyRatio;
+    int mCullMinNeighborCovis;
     float mCullMaxTrans;
     float mCullMaxRot;
     bool mCullProtectTag;

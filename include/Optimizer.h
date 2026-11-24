@@ -134,6 +134,7 @@ public:
 
     // For inertial systems
 
+    static void LoadLocalInertialBASettings(const std::string &settingsPath);
     void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge = false, bool bRecInit = false,
                                const xreal_tag::TagLocalBAParams &tagParams = xreal_tag::TagLocalBAParams(),
                                xreal_tag::TagLocalBAStats *tagStats = nullptr);
